@@ -100,8 +100,8 @@ bangen/
 ├── 🐍 bangen.py          # Main application
 ├── 📦 requirements.txt   # Dependencies
 ├── 📄 LICENSE            # MIT license
-└── 🙈 .gitignore         # Python defaults
-└── 💁‍♂️ README.md          # Project information
+├── 🙈 .gitignore         # Python defaults
+├── 💁‍♂️ README.md          # Project information
 └── 📸 screenshot.png     # A screenshot of the app
 ```
 
