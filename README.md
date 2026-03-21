@@ -29,7 +29,7 @@
 
 <p align="center">
   <a href="https://youtu.be/QaXEEHgKrUg">
-    <img src="https://img.youtube.com/vi/QaXEEHgKrUg/maxresdefault.jpg" alt="Demo video" width="720">
+    <img src="https://img.youtube.com/vi/QaXEEHgKrUg/0.jpg" alt="Demo video" width="720">
   </a>
 </p>
 
