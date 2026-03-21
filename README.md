@@ -25,7 +25,7 @@
 
 ## ▶️ Demonstration
 
-## 🎬 Demo
+👆 Click the picture to watch the demo (redirects to YouTube)
 
 <p align="center">
   <a href="https://youtu.be/QaXEEHgKrUg">
