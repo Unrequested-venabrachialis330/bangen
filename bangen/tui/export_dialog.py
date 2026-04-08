@@ -56,7 +56,9 @@ class ExportDialog:
         body.add_row("Path", self._field_value("path", self.path))
 
         if self.format == "gif":
-            body.add_row("Duration", self._field_value("duration", f"{self.duration:.2f}"))
+            body.add_row(
+                "Duration", self._field_value("duration", f"{self.duration:.2f}")
+            )
             body.add_row("FPS", self._field_value("fps", str(self.fps)))
             body.add_row("Frames", self._gif_frame_summary())
 

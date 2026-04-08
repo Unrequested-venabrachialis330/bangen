@@ -1,29 +1,21 @@
 # Bangen
 
-```text
-██████╗  █████╗ ███╗   ██╗ ██████╗ ███████╗███╗   ██╗
-██╔══██╗██╔══██╗████╗  ██║██╔════╝ ██╔════╝████╗  ██║
-██████╔╝███████║██╔██╗ ██║██║  ███╗█████╗  ██╔██╗ ██║
-██╔══██╗██╔══██║██║╚██╗██║██║   ██║██╔══╝  ██║╚██╗██║
-██████╔╝██║  ██║██║ ╚████║╚██████╔╝███████╗██║ ╚████║
-╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝
-```
+![App Banner](demo/app_banner.gif)
+
+Bangen is an ASCII banner renderer built on `pyfiglet`, `rich`, and Pillow. It includes a live TUI editor, a composable effect pipeline, JSON presets, and export support for `TXT`, `PNG`, `GIF`, and `HTML`.
 
 ![Screenshot](demo/screenshot.png)
 
-**v2.2.0**
-
-Bangen is a modular ASCII rendering engine built on `pyfiglet`, `rich`, and Pillow. It ships with a pipeline-first effect system, live terminal preview, transparent PNG/GIF export, and a tiered library of motion, visual, temporal, distortion, and signature effects.
-
 ## Features
 
-- Live split-screen TUI with modal export workflow
+- Live split-screen TUI with export modal
+- Static and animated banner rendering
 - Transparent `PNG` and animated transparent `GIF` export
-- Plain `TXT` export with exact static ASCII
-- 30-effect library designed for composition order
-- Multi-stop gradients with horizontal and vertical interpolation
+- Plain `TXT` export with exact ASCII output
+- Multi-stop gradients with horizontal or vertical interpolation
 - Built-in presets plus user presets stored in `~/.bangen/presets/`
-- CLI render/export flow plus `--list-effects`, `--list-fonts`, and `--list-presets`
+- Effect library grouped into motion, visual, temporal, distortion, and signature tiers
+- CLI workflows for rendering, exporting, listing assets, and loading presets
 
 ## Installation
 
@@ -38,7 +30,33 @@ pip install -e .
 Requirements:
 
 - Python `3.11+`
-- `Pillow` is included in the base install
+- Pillow is included in the base install
+
+## Quick Start
+
+Render a basic banner:
+
+```bash
+bangen "HELLO"
+```
+
+Render with custom styling:
+
+```bash
+bangen "HELLO" --font slant --gradient "#ff00ff:#00ffff"
+```
+
+Render with effects:
+
+```bash
+bangen "HELLO" --effect wave --effect glow --effect pulse --speed 1.5 --amplitude 2.0
+```
+
+Export a GIF:
+
+```bash
+bangen "HELLO" --effect wave --effect glow --export-gif banner.gif --gif-duration 3 --gif-fps 20
+```
 
 ## TUI
 
@@ -52,38 +70,35 @@ Controls:
 
 - `↑↓` navigate fields and effects
 - `←→` adjust font or numeric settings
-- `Enter` edit/toggle the selected field
+- `Enter` edit or toggle the selected field
 - `l` load a saved preset or load from a custom preset file
 - `e` open the export dialog
 - `s` save the current preset
 - `q` quit
 
-The effect selector is windowed, so you can move through the whole library without overflowing the controls panel.
+The effect selector is windowed, so you can move through the full library without overflowing the controls panel.
 
 ### Export Dialog
 
-Press `e` inside the TUI to open the modal exporter.
+Press `e` inside the TUI to open the exporter.
 
 - Toggle `GIF`, `PNG`, and `TXT`
 - Edit the output path directly
-- GIF-only `duration` and `fps` controls
-- Auto-updating file extension when the format changes
-- Overwrite confirmation for existing files
-- Transparent raster output for both `PNG` and `GIF`
-- GIF frame cap at `300`
+- Adjust GIF-only `duration` and `fps`
+- Auto-update the file extension when the format changes
+- Confirm overwrite when the target file already exists
 
 ## CLI
 
-Basic rendering:
+### Basic Rendering
 
 ```bash
 bangen "HELLO"
 bangen "HELLO" --font slant --gradient "#ff00ff:#00ffff"
 bangen "HELLO" --gradient "#ff0000:#ffff00:#00ff00" --gradient-dir vertical
-bangen "HELLO" --effect wave --effect chromatic_aberration --effect pulse --speed 1.5 --amplitude 2.0
 ```
 
-Discovery:
+### Discoverability
 
 ```bash
 bangen --list-effects
@@ -91,7 +106,7 @@ bangen --list-fonts
 bangen --list-presets
 ```
 
-Preset and AI flows:
+### Presets and AI
 
 ```bash
 bangen --preset cyberpunk "HELLO"
@@ -100,27 +115,24 @@ bangen --preset-file ./my_preset.json "HELLO"
 bangen "HELLO" --ai "retro CRT hacker title"
 ```
 
-Export:
+### Export
 
 ```bash
 bangen "HELLO" --export-txt banner.txt
 bangen "HELLO" --export-png banner.png
-bangen "HELLO" --effect wave --effect glow --effect pulse --export-gif banner.gif --gif-duration 3 --gif-fps 20
+bangen "HELLO" --effect wave --effect glow --export-gif banner.gif --gif-duration 3 --gif-fps 20
+bangen "HELLO" --export-html banner.html
 ```
 
-Terminal animation (useful for temporal effects like `wipe`/`typewriter`):
+### Terminal Animation
+
+Useful for temporal effects such as `wipe` and `typewriter`:
 
 ```bash
 bangen "HELLO" --effect wipe --animate --animate-duration 5
 ```
 
-Legacy HTML export remains available:
-
-```bash
-bangen "HELLO" --export-html banner.html
-```
-
-## Effect Library
+## Effects
 
 ### Motion
 
@@ -169,7 +181,7 @@ bangen "HELLO" --export-html banner.html
 
 ## Composition
 
-Effects are order-sensitive and chainable:
+Effects are order-sensitive and composable:
 
 ```python
 banner.apply(build_effect("wave", config=cfg))
@@ -177,7 +189,7 @@ banner.apply(build_effect("chromatic_aberration", config=cfg))
 banner.apply(build_effect("pulse", config=cfg))
 ```
 
-Recommended style stacks:
+Common style stacks:
 
 - `cyberpunk`: `glitch` + `chromatic_aberration` + `pulse`
 - `neon`: `glow` + `pulse` or `neon_sign`
@@ -186,7 +198,7 @@ Recommended style stacks:
 - `fire`: `fire` + `melt`
 - `electric`: `electric` + `glow`
 
-## Gradient Format
+## Gradients
 
 Use colon-separated hex stops:
 
@@ -199,25 +211,23 @@ Use `--gradient-dir vertical` for top-to-bottom interpolation.
 
 ## Presets
 
-### Where Presets Live
+### Storage
 
-Saved presets are JSON files under:
+Saved presets live under:
 
 ```text
 ~/.bangen/presets/*.json
 ```
 
-You can create these files yourself, save them from the TUI (`s`), or save from the CLI (`--save-preset NAME`).
+You can create these files manually, save them from the TUI with `s`, or save from the CLI with `--save-preset NAME`.
 
-### Loading Presets
+### Loading
 
-- TUI: press `l` and pick `Source: SAVED` (or switch to `Source: FILE` to load a custom JSON path).
-- CLI: `--preset NAME` loads from built-ins or `~/.bangen/presets/`.
-- CLI: `--preset-file PATH` loads a preset JSON from any path (it is not automatically saved).
+- TUI: press `l`, then choose `SAVED` or `FILE`
+- CLI: `--preset NAME` loads from built-ins or `~/.bangen/presets/`
+- CLI: `--preset-file PATH` loads a preset JSON from any path without saving it
 
-### Creating Presets (JSON Format)
-
-Preset JSON schema (minimal keys shown):
+### Preset Format
 
 ```json
 {
@@ -236,10 +246,10 @@ Preset JSON schema (minimal keys shown):
 
 Notes:
 
-- `name`, `font`, and `gradient` are required for a fully-specified preset.
-- `gradient` is the same colon-separated stop format as `--gradient`.
-- `effects` order matters (the pipeline is compositional and order-sensitive).
-- `effect_config` is per-effect; `speed`, `amplitude`, and `frequency` map to the shared `EffectConfig`, and any other keys are effect-specific kwargs.
+- `name`, `font`, and `gradient` should always be provided
+- `effects` order matters
+- `speed`, `amplitude`, and `frequency` map to shared `EffectConfig`
+- any additional keys inside `effect_config` are passed to the effect constructor
 
 ## Architecture
 
@@ -259,10 +269,12 @@ bangen/
 │   ├── png.py
 │   └── txt.py
 ├── gradients/
+├── presets/
 ├── rendering/
 └── tui/
     ├── app.py
-    └── export_dialog.py
+    ├── export_dialog.py
+    └── preset_dialog.py
 ```
 
 ## License

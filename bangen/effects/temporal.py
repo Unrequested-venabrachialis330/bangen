@@ -36,7 +36,9 @@ class TypewriterEffect(Effect):
         if total_chars == 0:
             return lines
 
-        typing_time = total_chars / (self.chars_per_second * max(self.config.speed, 0.1))
+        typing_time = total_chars / (
+            self.chars_per_second * max(self.config.speed, 0.1)
+        )
         cycle_time = typing_time + self.pause
 
         if self.loop:
@@ -139,7 +141,9 @@ class WipeEffect(Effect):
                     max_col = col
 
         self._min_row = min_row if min_row is not None else 0
-        self._max_row = max_row if max_row is not None else max(0, len(self._base_lines) - 1)
+        self._max_row = (
+            max_row if max_row is not None else max(0, len(self._base_lines) - 1)
+        )
         self._min_col = min_col if min_col is not None else 0
         self._max_col = max_col if max_col is not None else max(0, self._base_width - 1)
 

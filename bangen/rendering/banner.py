@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from rich.style import Style
 from rich.text import Text
 
-from bangen.effects.base import CellStyle, RGB
+from bangen.effects.base import RGB, CellStyle
 from bangen.effects.utils import clamp, scale_color
 
 if TYPE_CHECKING:

@@ -1,4 +1,4 @@
-"""Signature and composite effects."""
+"""Signature effects rewritten for stable, bounded composition."""
 
 from __future__ import annotations
 
@@ -32,8 +32,8 @@ class MatrixRainEffect(Effect):
     def apply(self, lines: list[str], t: float) -> list[str]:
         padded, width, height = padded_lines(lines)
         canvas = empty_canvas(width, height)
-        trail = max(3, int(4 + self.config.amplitude * 2))
-        tick = quantized_time(t, self.config.speed, rate=18.0)
+        trail = max(3, int(4 + self.config.amplitude * 1.5))
+        tick = quantized_time(t, self.config.speed, rate=12.0)
 
         for col in range(width):
             head = int((tick + (col * 3)) % (height + trail)) - trail
@@ -56,8 +56,8 @@ class MatrixRainEffect(Effect):
         lines: list[str],
     ):
         del color, char, lines
-        brightness = 0.45 + (
-            hash_noise(row, col, quantized_time(t, self.config.speed), 9.0) * 0.45
+        brightness = 0.55 + (
+            hash_noise(row, col, quantized_time(t, self.config.speed, 10.0), 9.0) * 0.3
         )
         return scale_color((90, 255, 120), brightness)
 
@@ -72,16 +72,22 @@ class FireEffect(Effect):
     def apply(self, lines: list[str], t: float) -> list[str]:
         padded, width, height = padded_lines(lines)
         canvas = empty_canvas(width, height)
-        tick = quantized_time(t, self.config.speed, rate=20.0)
+        tick = quantized_time(t, self.config.speed, rate=12.0)
         for row, line in enumerate(padded):
             for col, char in enumerate(line):
                 if char == " ":
                     continue
                 sway = math.sin(
-                    (col * self.config.frequency * 0.6) + (t * self.config.speed * 1.6)
+                    (col * self.config.frequency * 0.4) + (t * self.config.speed * 1.2)
                 )
-                dx = round(sway * (self.config.amplitude * 0.8))
-                dy = -round(hash_noise(tick, row, col, 5.0) * self.config.amplitude)
+                dx = max(-1, min(1, round(sway * (self.config.amplitude * 0.5))))
+                dy = -max(
+                    0,
+                    min(
+                        2,
+                        round(hash_noise(tick, row, col, 5.0) * self.config.amplitude),
+                    ),
+                )
                 target_row = max(0, row + dy)
                 target_col = col + dx
                 fire_index = min(
@@ -126,14 +132,29 @@ class ElectricEffect(Effect):
     def apply(self, lines: list[str], t: float) -> list[str]:
         padded, width, height = padded_lines(lines)
         canvas = empty_canvas(width, height)
-        tick = quantized_time(t, self.config.speed, rate=42.0)
+        tick = quantized_time(t, self.config.speed, rate=14.0)
         for row, line in enumerate(padded):
             for col, char in enumerate(line):
                 if char == " ":
                     continue
-                dx = round(signed_noise(tick, row, col, 7.0) * self.config.amplitude)
-                dy = round(
-                    signed_noise(tick, row, col, 13.0) * (self.config.amplitude * 0.5)
+                dx = max(
+                    -1,
+                    min(
+                        1,
+                        round(
+                            signed_noise(tick, row, col, 7.0) * self.config.amplitude
+                        ),
+                    ),
+                )
+                dy = max(
+                    -1,
+                    min(
+                        1,
+                        round(
+                            signed_noise(tick, row, col, 13.0)
+                            * (self.config.amplitude * 0.35)
+                        ),
+                    ),
                 )
                 place(canvas, col + dx, row + dy, char)
         return canvas_to_lines(canvas)
@@ -148,8 +169,8 @@ class ElectricEffect(Effect):
         lines: list[str],
     ) -> float:
         del row, col, char, lines
-        burst = hash_noise(quantized_time(t, self.config.speed, 36.0), 5.0)
-        return 0.75 + (0.75 if burst > 0.86 else burst * 0.3)
+        burst = hash_noise(quantized_time(t, self.config.speed, 16.0), 5.0)
+        return 0.86 + (0.18 if burst > 0.9 else burst * 0.08)
 
     def colorize(
         self,
@@ -179,8 +200,8 @@ class ElectricEffect(Effect):
         if char == " " or opacity <= 0.01:
             return ()
         return (
-            RasterLayer(dx=-1, dy=0, color=(80, 220, 255), alpha=0.24),
-            RasterLayer(dx=1, dy=0, color=(255, 255, 255), alpha=0.18),
+            RasterLayer(dx=-1, dy=0, color=(80, 220, 255), alpha=0.18),
+            RasterLayer(dx=1, dy=0, color=(255, 255, 255), alpha=0.14),
         )
 
 
@@ -193,13 +214,16 @@ class VHSGlitchEffect(Effect):
 
     def apply(self, lines: list[str], t: float) -> list[str]:
         padded, width, _ = padded_lines(lines)
-        tick = quantized_time(t, self.config.speed, rate=20.0)
+        tick = quantized_time(t, self.config.speed, rate=10.0)
         result: list[str] = []
         for row, line in enumerate(padded):
-            row_jump = round(
-                signed_noise(tick, row, 3.0)
-                * self.config.amplitude
-                * (2.4 if hash_noise(tick, row, 4.0) > 0.82 else 0.6)
+            burst = 1.8 if hash_noise(tick, row, 4.0) > 0.94 else 0.55
+            row_jump = max(
+                -2,
+                min(
+                    2,
+                    round(signed_noise(tick, row, 3.0) * self.config.amplitude * burst),
+                ),
             )
             if row_jump > 0:
                 result.append((" " * row_jump + line)[:width])
@@ -219,8 +243,8 @@ class VHSGlitchEffect(Effect):
         lines: list[str],
     ) -> float:
         del col, char, lines
-        phase = int(t * self.config.speed * 12)
-        return 0.62 if (row + phase) % 2 else 0.96
+        phase = int(t * self.config.speed * 8)
+        return 0.72 if (row + phase) % 2 else 0.96
 
     def colorize(
         self,
@@ -251,8 +275,8 @@ class VHSGlitchEffect(Effect):
             return ()
         shift = 1 if math.sin(t * self.config.speed * 2.4) >= 0 else -1
         return (
-            RasterLayer(dx=shift, dy=0, color=(255, 70, 120), alpha=0.22),
-            RasterLayer(dx=-shift, dy=0, color=(80, 220, 255), alpha=0.22),
+            RasterLayer(dx=shift, dy=0, color=(255, 70, 120), alpha=0.16),
+            RasterLayer(dx=-shift, dy=0, color=(80, 220, 255), alpha=0.16),
         )
 
 
@@ -276,9 +300,9 @@ class NeonSignEffect(Effect):
         lines: list[str],
     ) -> float:
         del row, col, char, lines
-        pulse = (math.sin(t * self.config.speed * math.pi * 1.25) + 1.0) / 2.0
-        flicker = hash_noise(quantized_time(t, self.config.speed, 32.0), 7.0)
-        dip = 0.25 if flicker > 0.94 else 0.0
+        pulse = (math.sin(t * self.config.speed * math.pi * 1.15) + 1.0) / 2.0
+        flicker = hash_noise(quantized_time(t, self.config.speed, 12.0), 7.0)
+        dip = 0.12 if flicker > 0.985 else 0.0
         return 0.68 + (pulse * 0.35) - dip
 
     def colorize(
@@ -308,12 +332,12 @@ class NeonSignEffect(Effect):
         del t, row, col, lines
         if char == " " or opacity <= 0.01:
             return ()
-        bright = blend_colors(color, (255, 255, 255), 0.2)
+        bright = blend_colors(color, (255, 255, 255), 0.18)
         return (
-            RasterLayer(dx=-1, dy=0, color=bright, alpha=0.22),
-            RasterLayer(dx=1, dy=0, color=bright, alpha=0.22),
-            RasterLayer(dx=0, dy=-1, color=bright, alpha=0.18),
-            RasterLayer(dx=0, dy=1, color=bright, alpha=0.18),
+            RasterLayer(dx=-1, dy=0, color=bright, alpha=0.16),
+            RasterLayer(dx=1, dy=0, color=bright, alpha=0.16),
+            RasterLayer(dx=0, dy=-1, color=bright, alpha=0.12),
+            RasterLayer(dx=0, dy=1, color=bright, alpha=0.12),
         )
 
 
@@ -327,12 +351,21 @@ class WaveInterferenceEffect(Effect):
     def apply(self, lines: list[str], t: float) -> list[str]:
         padded, width, _ = padded_lines(lines)
         result: list[str] = []
+        max_offset = max(1, min(5, width // 7 if width else 1))
         for row, line in enumerate(padded):
-            primary = math.sin((row * self.config.frequency) + (t * self.config.speed))
-            secondary = math.sin(
-                (row * self.config.frequency * 1.73) - (t * self.config.speed * 1.37)
+            primary = math.sin(
+                (row * self.config.frequency * 0.8) + (t * self.config.speed)
             )
-            offset = round((primary + secondary) * self.config.amplitude)
+            secondary = math.sin(
+                (row * self.config.frequency * 1.35) - (t * self.config.speed * 1.1)
+            )
+            offset = max(
+                -max_offset,
+                min(
+                    max_offset,
+                    round((primary + secondary) * 0.5 * self.config.amplitude),
+                ),
+            )
             if offset > 0:
                 result.append((" " * offset + line)[:width])
             elif offset < 0:

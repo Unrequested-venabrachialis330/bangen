@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from bangen.effects.base import BrightnessModifier, CellStyle, Effect, EffectConfig, RasterLayer
+from bangen.effects.base import (
+    BrightnessModifier,
+    CellStyle,
+    Effect,
+    EffectConfig,
+    RasterLayer,
+)
 from bangen.effects.distortion import (
     ChromaticAberrationEffect,
     FragmentEffect,
@@ -28,7 +34,12 @@ from bangen.effects.signature import (
     VHSGlitchEffect,
     WaveInterferenceEffect,
 )
-from bangen.effects.temporal import FadeInEffect, StaggerEffect, TypewriterEffect, WipeEffect
+from bangen.effects.temporal import (
+    FadeInEffect,
+    StaggerEffect,
+    TypewriterEffect,
+    WipeEffect,
+)
 from bangen.effects.visual import (
     FlickerEffect,
     GlowEffect,

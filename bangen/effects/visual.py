@@ -1,4 +1,4 @@
-"""Visual-tier effects."""
+"""Visual-tier effects rewritten for smooth, export-safe styling."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class GradientShiftEffect(Effect):
         lines: list[str],
     ) -> float:
         del row, col, line_length, line_count, char, lines
-        return (position + (t * self.config.speed * 0.12)) % 1.0
+        return (position + (t * self.config.speed * 0.08)) % 1.0
 
 
 class PulseEffect(Effect):
@@ -65,10 +65,8 @@ class PulseEffect(Effect):
         lines: list[str],
     ) -> float:
         del row, col, char, lines
-        phase = (math.sin(t * self.config.speed * math.pi) + 1.0) / 2.0
-        return self.min_brightness + phase * (
-            self.max_brightness - self.min_brightness
-        )
+        phase = (math.sin(t * self.config.speed * math.pi * 1.15) + 1.0) / 2.0
+        return self.min_brightness + phase * (self.max_brightness - self.min_brightness)
 
 
 class RainbowCycleEffect(Effect):
@@ -92,7 +90,7 @@ class RainbowCycleEffect(Effect):
         lines: list[str],
     ):
         del char, lines
-        amount = (t * self.config.speed * 0.08) + ((row + col) * 0.006)
+        amount = (t * self.config.speed * 0.06) + ((row + col) * 0.004)
         return shift_hue(color, amount)
 
 
@@ -117,7 +115,7 @@ class GlowEffect(Effect):
         lines: list[str],
     ):
         del t, row, col, char, lines
-        return scale_color(color, 1.18)
+        return scale_color(color, 1.12)
 
     def raster_layers(
         self,
@@ -133,12 +131,12 @@ class GlowEffect(Effect):
         del t, row, col, lines
         if char == " " or opacity <= 0.01:
             return ()
-        bloom = blend_colors(color, (255, 255, 255), 0.18)
+        bloom = blend_colors(color, (255, 255, 255), 0.14)
         return (
-            RasterLayer(dx=-1, dy=0, color=bloom, alpha=0.18),
-            RasterLayer(dx=1, dy=0, color=bloom, alpha=0.18),
-            RasterLayer(dx=0, dy=-1, color=bloom, alpha=0.14),
-            RasterLayer(dx=0, dy=1, color=bloom, alpha=0.14),
+            RasterLayer(dx=-1, dy=0, color=bloom, alpha=0.14),
+            RasterLayer(dx=1, dy=0, color=bloom, alpha=0.14),
+            RasterLayer(dx=0, dy=-1, color=bloom, alpha=0.1),
+            RasterLayer(dx=0, dy=1, color=bloom, alpha=0.1),
         )
 
 
@@ -162,10 +160,6 @@ class FlickerEffect(Effect):
         lines: list[str],
     ) -> float:
         del row, col, char, lines
-        # The original implementation used hard frame-quantized jumps across the
-        # whole banner, which looked acceptable in terminal preview but produced
-        # muddy, unstable GIF quantization. Keep the analog-Crt feel, but smooth
-        # transitions and avoid catastrophic full-frame dips.
         rate = max(6.0, 18.0 * self.config.speed)
         phase = t * rate
         base_frame = math.floor(phase)
@@ -203,9 +197,15 @@ class ScanlineEffect(Effect):
         char: str,
         lines: list[str],
     ) -> float:
-        del col, char, lines
-        phase = int(t * self.config.speed * 10.0)
-        return 0.55 if (row + phase) % 2 else 0.95
+        del col, char
+        line_count = max(1, len(lines))
+        scan = ((t * self.config.speed * 1.2) % 1.0) * line_count
+        distance = abs(row - scan)
+        if distance < 0.5:
+            return 0.78
+        if distance < 1.5:
+            return 0.88
+        return 0.96
 
 
 class LoopPulseEffect(Effect):
@@ -229,10 +229,5 @@ class LoopPulseEffect(Effect):
     ) -> float:
         del row, col, char, lines
         phase = (t * self.config.speed) % 1.0
-        if phase < 0.2:
-            envelope = phase / 0.2
-        elif phase < 0.55:
-            envelope = 1.0 - ((phase - 0.2) / 0.35)
-        else:
-            envelope = 0.0
-        return 0.45 + (clamp(envelope) * 0.55)
+        envelope = max(0.0, 1.0 - abs((phase * 2.0) - 0.5) * 1.35)
+        return 0.55 + (clamp(envelope) * 0.45)

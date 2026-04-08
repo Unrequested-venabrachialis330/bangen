@@ -48,7 +48,11 @@ class Exporter:
             spans: list[str] = []
             for ci, ch in enumerate(line):
                 style = banner.cell_style(lines, 0.0, li, ci, ch)
-                color = self._rgb_to_hex(style.color if ch != " " else self._rgb(gradient, ci, len(line), li, len(lines)))
+                color = self._rgb_to_hex(
+                    style.color
+                    if ch != " "
+                    else self._rgb(gradient, ci, len(line), li, len(lines))
+                )
                 esc = ch.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 spans.append(
                     f'<span style="color:{color}">{esc if esc.strip() else "&nbsp;"}</span>'

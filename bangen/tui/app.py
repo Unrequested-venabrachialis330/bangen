@@ -357,7 +357,9 @@ class TUIApp:
                 label_style = "bold reverse cyan" if selected else ""
                 pretty_name = effect_name.replace("_", " ")
                 table.add_row(
-                    Text.from_markup(f"{arrow} {mark} {pretty_name}", style=label_style),
+                    Text.from_markup(
+                        f"{arrow} {mark} {pretty_name}", style=label_style
+                    ),
                     Text(""),
                 )
 
