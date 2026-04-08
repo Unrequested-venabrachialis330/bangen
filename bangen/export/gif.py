@@ -13,9 +13,10 @@ if TYPE_CHECKING:
 
 MAX_GIF_FRAMES = 300
 _TRANSPARENT = (0, 0, 0, 0)
-_FONT_SIZE = 18
-_PADDING_X = 24
-_PADDING_Y = 24
+_FONT_SIZE = 28
+_PADDING_X = 32
+_PADDING_Y = 32
+_PALETTE_SAMPLE_FRAMES = 12
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,20 +84,25 @@ def export_gif(path: Path, banner: "Banner", duration: float, fps: float) -> Non
     metrics = measure_font(font)
     image_size = canvas_size(renderer, metrics)
 
-    frames = [
-        _rgba_to_gif_frame(
-            Image,
-            render_rgba_frame(
-                Image=Image,
-                ImageDraw=ImageDraw,
-                renderer=renderer,
-                font=font,
-                metrics=metrics,
-                image_size=image_size,
-                t=frame_index / settings.fps,
-            ),
+    rgba_frames = [
+        render_rgba_frame(
+            Image=Image,
+            ImageDraw=ImageDraw,
+            renderer=renderer,
+            font=font,
+            metrics=metrics,
+            image_size=image_size,
+            t=frame_index / settings.fps,
+            antialias=False,
         )
         for frame_index in range(settings.frame_count)
+    ]
+
+    # Build one palette from sampled frames across the animation so color-heavy
+    # effects don't get quantized against a palette that only matches frame 0.
+    palette = _build_palette_reference(Image, rgba_frames)
+    frames = [
+        _rgba_to_gif_frame(Image, rgba, palette_frame=palette) for rgba in rgba_frames
     ]
 
     frames[0].save(
@@ -127,9 +133,14 @@ def render_rgba_frame(
     metrics: FontMetrics,
     image_size: tuple[int, int],
     t: float,
+    antialias: bool = True,
 ):
     image = Image.new("RGBA", image_size, _TRANSPARENT)
     draw = ImageDraw.Draw(image)
+    # Pillow's FreeType renderer is antialiased by default; when converting to a
+    # constrained GIF palette this can look fuzzy. Allow exporters to opt out.
+    if hasattr(draw, "fontmode"):
+        draw.fontmode = "L" if antialias else "1"
     frame_lines = renderer.render_frame(t)
 
     for row, line in enumerate(frame_lines):
@@ -171,7 +182,13 @@ def render_rgba_frame(
 def measure_font(font) -> FontMetrics:
     bbox = font.getbbox("M")
     ascent, descent = font.getmetrics()
-    cell_width = max(1, bbox[2] - bbox[0])
+    # `getbbox()` returns the glyph's bounds, not the advance width.
+    # Using bounds can make characters overlap and look "broken" in raster exports.
+    getlength = getattr(font, "getlength", None)
+    if callable(getlength):
+        cell_width = max(1, int(round(float(getlength("M")))))
+    else:
+        cell_width = max(1, bbox[2] - bbox[0])
     cell_height = max(1, ascent + descent)
     origin_x = _PADDING_X - min(0, bbox[0])
     origin_y = _PADDING_Y - min(0, bbox[1])
@@ -192,14 +209,21 @@ def load_monospace_font(ImageFont, size: int):
     return ImageFont.load_default()
 
 
-def _rgba_to_gif_frame(Image, image):
+def _rgba_to_gif_frame(Image, image, *, palette_frame=None):
     quantize = getattr(Image, "Quantize", None)
     dither = getattr(Image, "Dither", None)
-    palette_frame = image.quantize(
-        colors=254,
-        method=getattr(quantize, "FASTOCTREE", 2),
-        dither=getattr(dither, "NONE", 0),
-    )
+    rgb = image.convert("RGB")
+    if palette_frame is None:
+        palette_frame = rgb.quantize(
+            colors=254,
+            method=getattr(quantize, "FASTOCTREE", 2),
+            dither=getattr(dither, "NONE", 0),
+        )
+    else:
+        palette_frame = rgb.quantize(
+            palette=palette_frame,
+            dither=getattr(dither, "NONE", 0),
+        )
 
     transparent_mask = image.getchannel("A").point(
         lambda alpha: 255 if alpha == 0 else 0
@@ -213,6 +237,41 @@ def _rgba_to_gif_frame(Image, image):
     palette_frame.info["transparency"] = 255
     palette_frame.info["disposal"] = 2
     return palette_frame
+
+
+def _build_palette_reference(Image, rgba_frames):
+    if len(rgba_frames) <= 1:
+        reference = _rgba_to_gif_frame(Image, rgba_frames[0])
+        palette_holder = Image.new("P", (1, 1))
+        palette_holder.putpalette(reference.getpalette() or [])
+        return palette_holder
+
+    sample_count = min(len(rgba_frames), _PALETTE_SAMPLE_FRAMES)
+    if sample_count <= 1:
+        sampled = [rgba_frames[0]]
+    else:
+        last = len(rgba_frames) - 1
+        sampled = []
+        seen = set()
+        for index in range(sample_count):
+            frame_index = round(index * last / (sample_count - 1))
+            if frame_index not in seen:
+                sampled.append(rgba_frames[frame_index])
+                seen.add(frame_index)
+
+    width = max(frame.width for frame in sampled)
+    height = sum(frame.height for frame in sampled)
+    strip = Image.new("RGBA", (width, height), _TRANSPARENT)
+
+    y = 0
+    for frame in sampled:
+        strip.alpha_composite(frame, (0, y))
+        y += frame.height
+
+    reference = _rgba_to_gif_frame(Image, strip)
+    palette_holder = Image.new("P", (1, 1))
+    palette_holder.putpalette(reference.getpalette() or [])
+    return palette_holder
 
 
 def _font_candidates() -> tuple[Path, ...]:

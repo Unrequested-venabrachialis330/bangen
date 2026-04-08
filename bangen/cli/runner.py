@@ -49,7 +49,13 @@ def run_cli(args: argparse.Namespace) -> None:
 
     # ---- load preset --------------------------------------------------
     preset: Preset | None = None
-    if args.preset:
+    if args.preset_file:
+        try:
+            preset = preset_manager.load_file(Path(args.preset_file))
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] failed to load preset file — {exc}")
+            sys.exit(2)
+    elif args.preset:
         preset = preset_manager.get(args.preset)
         if preset is None:
             console.print(
@@ -63,20 +69,21 @@ def run_cli(args: argparse.Namespace) -> None:
         s = suggest_from_prompt(args.ai)
         font = args.font or s.font
         gradient_str = args.gradient or s.gradient
+        gradient_dir = args.gradient_dir or s.gradient_direction or "horizontal"
         effects_list: list[str] = args.effects or s.effects
         effect_cfg_map: dict = s.effect_config
     elif preset:
         font = args.font or preset.font
         gradient_str = args.gradient or preset.gradient
+        gradient_dir = args.gradient_dir or preset.gradient_direction or "horizontal"
         effects_list = args.effects or list(preset.effects)
         effect_cfg_map = dict(preset.effect_config)
     else:
         font = args.font or DEFAULT_FONT
         gradient_str = args.gradient or "#00ffff:#ff00ff"
+        gradient_dir = args.gradient_dir or "horizontal"
         effects_list = args.effects or []
         effect_cfg_map = {}
-
-    gradient_dir = args.gradient_dir
 
     # ---- render -------------------------------------------------------
     banner = engine.render(text, font)
@@ -111,21 +118,21 @@ def run_cli(args: argparse.Namespace) -> None:
     if args.export_txt:
         try:
             exporter.export_txt(banner, Path(args.export_txt))
-            console.print(f"[green]TXT →[/green] {args.export_txt}")
+            console.print(f"[green]TXT ->[/green] {args.export_txt}")
         except Exception as exc:
             console.print(f"[red]{exc}[/red]")
 
     if args.export_html:
         try:
             exporter.export_html(banner, Path(args.export_html), gradient)
-            console.print(f"[green]HTML →[/green] {args.export_html}")
+            console.print(f"[green]HTML ->[/green] {args.export_html}")
         except Exception as exc:
             console.print(f"[red]{exc}[/red]")
 
     if args.export_png:
         try:
             exporter.export_png(banner, Path(args.export_png), gradient)
-            console.print(f"[green]PNG →[/green] {args.export_png}")
+            console.print(f"[green]PNG ->[/green] {args.export_png}")
         except Exception as exc:
             console.print(f"[red]{exc}[/red]")
 
@@ -137,7 +144,7 @@ def run_cli(args: argparse.Namespace) -> None:
                 duration=args.gif_duration,
                 fps=args.gif_fps,
             )
-            console.print(f"[green]GIF →[/green] {args.export_gif}")
+            console.print(f"[green]GIF ->[/green] {args.export_gif}")
         except Exception as exc:
             console.print(f"[red]{exc}[/red]")
 

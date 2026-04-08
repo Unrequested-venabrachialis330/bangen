@@ -115,24 +115,66 @@ class WipeEffect(Effect):
     def name(self) -> str:
         return "wipe"
 
+    def precompute(self, banner) -> None:
+        super().precompute(banner)
+        # Compute the bounding box of visible (non-space) characters so the wipe
+        # doesn't spend most of its time "revealing" indentation.
+        min_row = None
+        max_row = None
+        min_col = None
+        max_col = None
+        for row, line in enumerate(self._base_lines):
+            if not line:
+                continue
+            for col, ch in enumerate(line):
+                if ch == " ":
+                    continue
+                if min_row is None or row < min_row:
+                    min_row = row
+                if max_row is None or row > max_row:
+                    max_row = row
+                if min_col is None or col < min_col:
+                    min_col = col
+                if max_col is None or col > max_col:
+                    max_col = col
+
+        self._min_row = min_row if min_row is not None else 0
+        self._max_row = max_row if max_row is not None else max(0, len(self._base_lines) - 1)
+        self._min_col = min_col if min_col is not None else 0
+        self._max_col = max_col if max_col is not None else max(0, self._base_width - 1)
+
     def apply(self, lines: list[str], t: float) -> list[str]:
-        progress = t * self.config.speed * 0.5
+        progress = t * self.config.speed
         if self.loop:
             progress = progress % 1.0
         else:
             progress = clamp(progress)
 
         if self.direction == "vertical":
-            cutoff = round(len(lines) * progress)
-            return [
-                line if row < cutoff else (" " * len(line))
-                for row, line in enumerate(lines)
-            ]
+            start = self._min_row
+            height = max(1, (self._max_row - self._min_row) + 1)
+            cutoff = start + round(height * progress)
+            result: list[str] = []
+            for row, line in enumerate(lines):
+                if row < start or row > self._max_row:
+                    result.append(line)
+                elif row < cutoff:
+                    result.append(line)
+                else:
+                    result.append(" " * len(line))
+            return result
 
         result: list[str] = []
+        start = self._min_col
+        width = max(1, (self._max_col - self._min_col) + 1)
+        cutoff_col = start + round(width * progress)
         for line in lines:
-            cutoff = round(len(line) * progress)
-            result.append(line[:cutoff] + (" " * max(0, len(line) - cutoff)))
+            if not line:
+                result.append(line)
+                continue
+            padded = line.ljust(self._base_width)
+            cutoff = max(0, min(len(padded), cutoff_col))
+            result.append(padded[:cutoff] + (" " * max(0, len(padded) - cutoff)))
         return result
 
 

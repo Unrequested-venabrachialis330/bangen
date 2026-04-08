@@ -16,7 +16,7 @@ from bangen.export.gif import (
 if TYPE_CHECKING:
     from bangen.rendering.banner import Banner
 
-_FONT_SIZE = 18
+_FONT_SIZE = 28
 
 
 def export_png(path: Path, banner: "Banner") -> None:
@@ -36,5 +36,6 @@ def export_png(path: Path, banner: "Banner") -> None:
         metrics=metrics,
         image_size=canvas_size(renderer, metrics),
         t=0.0,
+        antialias=True,
     )
     image.save(path, "PNG")

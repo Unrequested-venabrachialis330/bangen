@@ -162,11 +162,26 @@ class FlickerEffect(Effect):
         lines: list[str],
     ) -> float:
         del row, col, char, lines
-        frame = math.floor(t * self.config.speed * 28.0)
-        noise = hash_noise(frame, self.config.amplitude, 7.0)
-        if noise > 0.92:
-            return 0.25 + (hash_noise(frame, 13.0) * 0.35)
-        return 0.82 + (noise * 0.18)
+        # The original implementation used hard frame-quantized jumps across the
+        # whole banner, which looked acceptable in terminal preview but produced
+        # muddy, unstable GIF quantization. Keep the analog-Crt feel, but smooth
+        # transitions and avoid catastrophic full-frame dips.
+        rate = max(6.0, 18.0 * self.config.speed)
+        phase = t * rate
+        base_frame = math.floor(phase)
+        mix = phase - base_frame
+
+        n0 = hash_noise(base_frame, self.config.amplitude, 7.0)
+        n1 = hash_noise(base_frame + 1.0, self.config.amplitude, 7.0)
+        noise = (n0 * (1.0 - mix)) + (n1 * mix)
+
+        brightness = 0.88 + ((noise - 0.5) * 0.16)
+
+        dip0 = 1.0 if hash_noise(base_frame, 13.0) > 0.985 else 0.0
+        dip1 = 1.0 if hash_noise(base_frame + 1.0, 13.0) > 0.985 else 0.0
+        dip = (dip0 * (1.0 - mix)) + (dip1 * mix)
+
+        return clamp(brightness - (dip * 0.18), 0.62, 1.0)
 
 
 class ScanlineEffect(Effect):

@@ -36,9 +36,16 @@ class Preset:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Preset":
+    def from_dict(
+        cls, data: dict[str, Any], *, default_name: str | None = None
+    ) -> "Preset":
+        # `name` is required for built-ins and saved presets, but allow
+        # fallback to the filename stem when loading ad-hoc JSON files.
+        name = data.get("name") or default_name
+        if not name:
+            raise ValueError("Preset JSON is missing required field: 'name'")
         return cls(
-            name=data["name"],
+            name=name,
             font=data.get("font", "ansi_shadow"),
             gradient=data.get("gradient", "#00ffff:#ff00ff"),
             gradient_direction=data.get("gradient_direction", "horizontal"),
@@ -179,7 +186,7 @@ class PresetManager:
         for path in self._dir.glob("*.json"):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-                preset = Preset.from_dict(data)
+                preset = Preset.from_dict(data, default_name=path.stem)
                 self._user[preset.name] = preset
             except Exception:
                 pass
@@ -215,3 +222,9 @@ class PresetManager:
         target_dir.mkdir(parents=True, exist_ok=True)
         for name, preset in self.list_presets().items():
             (target_dir / f"{name}.json").write_text(preset.to_json(), encoding="utf-8")
+
+    def load_file(self, path: Path) -> Preset:
+        """Load a preset JSON file from an arbitrary path (does not save it)."""
+        target = Path(path).expanduser()
+        data = json.loads(target.read_text(encoding="utf-8"))
+        return Preset.from_dict(data, default_name=target.stem)

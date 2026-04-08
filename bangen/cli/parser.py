@@ -17,6 +17,7 @@ Examples:
   bangen "HELLO" --font slant --gradient "#ff00ff:#00ffff"
   bangen "HELLO" --effect wave --effect chromatic_aberration --effect pulse --speed 1.5
   bangen --preset neon_wave "HELLO"
+  bangen --preset-file ./preset.json "HELLO"
   bangen "HELLO" --ai "cyberpunk neon hacker vibe"
   bangen "HELLO" --export-png banner.png --export-gif banner.gif
   bangen --list-effects
@@ -33,7 +34,10 @@ Examples:
         help="Colon-separated hex stops: '#ff00ff:#00ffff'",
     )
     p.add_argument(
-        "--gradient-dir", choices=["horizontal", "vertical"], default="horizontal"
+        "--gradient-dir",
+        choices=["horizontal", "vertical"],
+        default=None,
+        help="Gradient direction. When omitted, uses preset/AI suggestion value (or defaults to 'horizontal').",
     )
     p.add_argument(
         "--effect",
@@ -47,6 +51,12 @@ Examples:
     p.add_argument("--amplitude", type=float, default=1.0)
     p.add_argument("--frequency", type=float, default=1.0)
     p.add_argument("--preset", "-p", default=None)
+    p.add_argument(
+        "--preset-file",
+        metavar="PATH",
+        default=None,
+        help="Load a preset JSON from a custom file path (does not save it).",
+    )
     p.add_argument("--list-presets", action="store_true")
     p.add_argument("--list-fonts", action="store_true")
     p.add_argument("--list-effects", action="store_true")

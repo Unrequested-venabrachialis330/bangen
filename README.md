@@ -22,7 +22,7 @@ Bangen is a modular ASCII rendering engine built on `pyfiglet`, `rich`, and Pill
 - Plain `TXT` export with exact static ASCII
 - 30-effect library designed for composition order
 - Multi-stop gradients with horizontal and vertical interpolation
-- Built-in presets for cyberpunk, matrix, neon, retro, fire, VHS, and electric styles
+- Built-in presets plus user presets stored in `~/.bangen/presets/`
 - CLI render/export flow plus `--list-effects`, `--list-fonts`, and `--list-presets`
 
 ## Installation
@@ -53,6 +53,7 @@ Controls:
 - `↑↓` navigate fields and effects
 - `←→` adjust font or numeric settings
 - `Enter` edit/toggle the selected field
+- `l` load a saved preset or load from a custom preset file
 - `e` open the export dialog
 - `s` save the current preset
 - `q` quit
@@ -95,6 +96,7 @@ Preset and AI flows:
 ```bash
 bangen --preset cyberpunk "HELLO"
 bangen --preset matrix "SYSTEM"
+bangen --preset-file ./my_preset.json "HELLO"
 bangen "HELLO" --ai "retro CRT hacker title"
 ```
 
@@ -104,6 +106,12 @@ Export:
 bangen "HELLO" --export-txt banner.txt
 bangen "HELLO" --export-png banner.png
 bangen "HELLO" --effect wave --effect glow --effect pulse --export-gif banner.gif --gif-duration 3 --gif-fps 20
+```
+
+Terminal animation (useful for temporal effects like `wipe`/`typewriter`):
+
+```bash
+bangen "HELLO" --effect wipe --animate --animate-duration 5
 ```
 
 Legacy HTML export remains available:
@@ -188,6 +196,50 @@ Use colon-separated hex stops:
 ```
 
 Use `--gradient-dir vertical` for top-to-bottom interpolation.
+
+## Presets
+
+### Where Presets Live
+
+Saved presets are JSON files under:
+
+```text
+~/.bangen/presets/*.json
+```
+
+You can create these files yourself, save them from the TUI (`s`), or save from the CLI (`--save-preset NAME`).
+
+### Loading Presets
+
+- TUI: press `l` and pick `Source: SAVED` (or switch to `Source: FILE` to load a custom JSON path).
+- CLI: `--preset NAME` loads from built-ins or `~/.bangen/presets/`.
+- CLI: `--preset-file PATH` loads a preset JSON from any path (it is not automatically saved).
+
+### Creating Presets (JSON Format)
+
+Preset JSON schema (minimal keys shown):
+
+```json
+{
+  "name": "my_preset",
+  "font": "ansi_shadow",
+  "gradient": "#ff00ff:#00ffff",
+  "gradient_direction": "horizontal",
+  "effects": ["wave", "glow", "pulse"],
+  "effect_config": {
+    "wave": { "speed": 1.8, "amplitude": 2.0, "frequency": 0.7 },
+    "pulse": { "speed": 1.2, "min_brightness": 0.55 },
+    "glow": {}
+  }
+}
+```
+
+Notes:
+
+- `name`, `font`, and `gradient` are required for a fully-specified preset.
+- `gradient` is the same colon-separated stop format as `--gradient`.
+- `effects` order matters (the pipeline is compositional and order-sensitive).
+- `effect_config` is per-effect; `speed`, `amplitude`, and `frequency` map to the shared `EffectConfig`, and any other keys are effect-specific kwargs.
 
 ## Architecture
 

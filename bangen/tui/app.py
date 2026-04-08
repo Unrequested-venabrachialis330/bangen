@@ -20,6 +20,7 @@ from bangen.gradients.gradient import Gradient
 from bangen.presets.manager import Preset, PresetManager
 from bangen.rendering.engine import PRESET_FONTS, RenderEngine
 from bangen.tui.export_dialog import ExportDialog
+from bangen.tui.preset_dialog import PresetDialog
 
 # field indices
 _F_TEXT = 0
@@ -60,7 +61,7 @@ class TUIApp:
         self._state = TUIState()
         self._console = Console()
         self.banner = None
-        self.active_modal: ExportDialog | None = None
+        self.active_modal: ExportDialog | PresetDialog | None = None
 
     def load_preset(self, preset: Preset) -> None:
         state = self._state
@@ -186,6 +187,11 @@ class TUIApp:
                 self.open_export_dialog()
             except Exception as exc:
                 state.status = f"Export unavailable: {exc}"
+        elif key in ("l", "L"):
+            try:
+                self.active_modal = PresetDialog(self._pm, on_load=self.load_preset)
+            except Exception as exc:
+                state.status = f"Preset loader unavailable: {exc}"
         elif key in ("q", "Q", "\x03", "\x04"):
             state.running = False
         elif key in ("s", "S"):
@@ -369,7 +375,10 @@ class TUIApp:
             table.add_row(Text(""), Text(state.status, style="yellow"))
 
         table.add_row(Text(""), Text(""))
-        table.add_row(Text(" [e] export  [s] save preset", style="dim"), Text(""))
+        table.add_row(
+            Text(" [l] load preset  [e] export  [s] save preset", style="dim"),
+            Text(""),
+        )
         return table
 
     def _effects_summary(self) -> str:
@@ -432,6 +441,7 @@ class TUIApp:
             ("↑↓", "navigate"),
             ("←→", "adjust"),
             ("Enter", "edit/toggle"),
+            ("l", "load presets"),
             ("e", "export"),
             ("q", "quit"),
         ]
