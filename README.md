@@ -1,12 +1,15 @@
-# Bangen
+# Bangen ✨
 
 ![App Banner](demo/app_banner.gif)
 
-Bangen is an ASCII banner renderer built on `pyfiglet`, `rich`, and Pillow. It includes a live TUI editor, a composable effect pipeline, JSON presets, and export support for `TXT`, `PNG`, `GIF`, and `HTML`.
+**Bangen** is an ASCII banner renderer built on `pyfiglet`, `rich`, and `Pillow`.
+It gives you a fast live **TUI**, a composable effect pipeline, JSON presets, and export support for `TXT`, `PNG`, `GIF`, and `HTML`.
+
+Built for terminal art, title cards, intros, and animated text that still feels sharp when exported.
 
 ![Screenshot](demo/screenshot.png)
 
-## Features
+## Why It Stands Out ⚡
 
 - Live split-screen TUI with export modal
 - Static and animated banner rendering
@@ -17,7 +20,13 @@ Bangen is an ASCII banner renderer built on `pyfiglet`, `rich`, and Pillow. It i
 - Effect library grouped into motion, visual, temporal, distortion, and signature tiers
 - CLI workflows for rendering, exporting, listing assets, and loading presets
 
-## Installation
+## Quick Look 👀
+
+```bash
+bangen "SYSTEM READY" --font slant --gradient "#7c3aed:#06b6d4" --effect glow --effect wave
+```
+
+## Setup 🛠️
 
 ```bash
 git clone https://github.com/pro-grammer-SD/bangen.git
@@ -32,7 +41,7 @@ Requirements:
 - Python `3.11+`
 - Pillow is included in the base install
 
-## Quick Start
+## Quick Start 🚀
 
 Render a basic banner:
 
@@ -58,7 +67,9 @@ Export a GIF:
 bangen "HELLO" --effect wave --effect glow --export-gif banner.gif --gif-duration 3 --gif-fps 20
 ```
 
-## TUI
+## Interface 🎛️
+
+### TUI 🖥️
 
 Launch the editor:
 
@@ -78,7 +89,7 @@ Controls:
 
 The effect selector is windowed, so you can move through the full library without overflowing the controls panel.
 
-### Export Dialog
+### Export Dialog 📦
 
 Press `e` inside the TUI to open the exporter.
 
@@ -88,9 +99,9 @@ Press `e` inside the TUI to open the exporter.
 - Auto-update the file extension when the format changes
 - Confirm overwrite when the target file already exists
 
-## CLI
+### CLI ⌨️
 
-### Basic Rendering
+#### Basic Rendering
 
 ```bash
 bangen "HELLO"
@@ -98,7 +109,7 @@ bangen "HELLO" --font slant --gradient "#ff00ff:#00ffff"
 bangen "HELLO" --gradient "#ff0000:#ffff00:#00ff00" --gradient-dir vertical
 ```
 
-### Discoverability
+#### Discoverability
 
 ```bash
 bangen --list-effects
@@ -106,7 +117,7 @@ bangen --list-fonts
 bangen --list-presets
 ```
 
-### Presets and AI
+#### Presets and AI
 
 ```bash
 bangen --preset cyberpunk "HELLO"
@@ -115,7 +126,7 @@ bangen --preset-file ./my_preset.json "HELLO"
 bangen "HELLO" --ai "retro CRT hacker title"
 ```
 
-### Export
+#### Export
 
 ```bash
 bangen "HELLO" --export-txt banner.txt
@@ -124,7 +135,7 @@ bangen "HELLO" --effect wave --effect glow --export-gif banner.gif --gif-duratio
 bangen "HELLO" --export-html banner.html
 ```
 
-### Terminal Animation
+#### Terminal Animation
 
 Useful for temporal effects such as `wipe` and `typewriter`:
 
@@ -132,7 +143,7 @@ Useful for temporal effects such as `wipe` and `typewriter`:
 bangen "HELLO" --effect wipe --animate --animate-duration 5
 ```
 
-## Effects
+## Effects Library 🎨
 
 ### Motion
 
@@ -179,7 +190,7 @@ bangen "HELLO" --effect wipe --animate --animate-duration 5
 - `wave_interference`
 - `particle_disintegration`
 
-## Composition
+## Effect Stacks 🧪
 
 Effects are order-sensitive and composable:
 
@@ -198,7 +209,9 @@ Common style stacks:
 - `fire`: `fire` + `melt`
 - `electric`: `electric` + `glow`
 
-## Gradients
+## Styling & Presets 🌈
+
+### Gradients
 
 Use colon-separated hex stops:
 
@@ -209,9 +222,9 @@ Use colon-separated hex stops:
 
 Use `--gradient-dir vertical` for top-to-bottom interpolation.
 
-## Presets
+### Presets 💾
 
-### Storage
+#### Storage
 
 Saved presets live under:
 
@@ -221,13 +234,13 @@ Saved presets live under:
 
 You can create these files manually, save them from the TUI with `s`, or save from the CLI with `--save-preset NAME`.
 
-### Loading
+#### Loading
 
 - TUI: press `l`, then choose `SAVED` or `FILE`
 - CLI: `--preset NAME` loads from built-ins or `~/.bangen/presets/`
 - CLI: `--preset-file PATH` loads a preset JSON from any path without saving it
 
-### Preset Format
+#### Preset Format
 
 ```json
 {
@@ -251,7 +264,7 @@ Notes:
 - `speed`, `amplitude`, and `frequency` map to shared `EffectConfig`
 - any additional keys inside `effect_config` are passed to the effect constructor
 
-## Architecture
+## Project Layout 🧱
 
 ```text
 bangen/
@@ -277,6 +290,11 @@ bangen/
     └── preset_dialog.py
 ```
 
-## License
+## Notes 📝
+
+- Animated exports look best when you keep effect stacks readable instead of maxing out distortion-heavy combinations.
+- Temporal effects such as `wipe` and `typewriter` are best previewed with `--animate` in the terminal before exporting.
+
+## License 📄
 
 MIT. See [LICENSE](LICENSE).
