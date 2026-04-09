@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
 
 from rich import box
 from rich.console import Console
@@ -93,12 +93,14 @@ class TUIApp:
         import tty
 
         fd = sys.stdin.fileno()
-        saved = termios.tcgetattr(fd)
+        termios_mod: Any = termios
+        tty_mod: Any = tty
+        saved = termios_mod.tcgetattr(fd)
         try:
-            tty.setraw(fd)
+            tty_mod.setraw(fd)
             self._event_loop(lambda: self._unix_key(fd))
         finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+            termios_mod.tcsetattr(fd, termios_mod.TCSADRAIN, saved)
 
     def _unix_key(self, fd: int) -> str | None:
         import select
@@ -403,8 +405,9 @@ class TUIApp:
 
     def _preview(self) -> Text:
         try:
-            self.banner = self._compose_banner()
-            return self.banner.render_frame(self._state.t)
+            banner = self._compose_banner()
+            self.banner = banner
+            return banner.render_frame(self._state.t)
         except Exception as exc:
             self.banner = None
             return Text(f"Preview error: {exc}", style="red")

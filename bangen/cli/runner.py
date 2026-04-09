@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import sys
 import time
 from pathlib import Path
@@ -11,6 +10,13 @@ from rich import box
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
+from rich.progress import (
+    Progress,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.table import Table
 
 from bangen.cli.screensaver import run_screensaver
@@ -21,7 +27,7 @@ from bangen.presets.manager import Preset, PresetManager
 from bangen.rendering.engine import DEFAULT_FONT, RenderEngine
 
 
-def run_cli(args: argparse.Namespace) -> None:
+def run_cli(args) -> None:
     console = Console()
     exporter = Exporter()
 
@@ -87,7 +93,7 @@ def run_cli(args: argparse.Namespace) -> None:
         effect_cfg_map = {}
 
     if args.screensaver:
-        if any((args.export_txt, args.export_html, args.export_png, args.export_gif)):
+        if any((args.export_txt, args.export_png, args.export_gif)):
             console.print(
                 "[yellow]Warning:[/yellow] export flags are ignored in screensaver mode."
             )
@@ -135,32 +141,49 @@ def run_cli(args: argparse.Namespace) -> None:
     # ---- exports ------------------------------------------------------
     if args.export_txt:
         try:
-            exporter.export_txt(banner, Path(args.export_txt))
+            _export_with_progress(
+                console,
+                label="TXT",
+                target=args.export_txt,
+                work=lambda callback: exporter.export_txt(
+                    banner,
+                    Path(args.export_txt),
+                    progress_callback=callback,
+                ),
+            )
             console.print(f"[green]TXT ->[/green] {args.export_txt}")
-        except Exception as exc:
-            console.print(f"[red]{exc}[/red]")
-
-    if args.export_html:
-        try:
-            exporter.export_html(banner, Path(args.export_html), gradient)
-            console.print(f"[green]HTML ->[/green] {args.export_html}")
         except Exception as exc:
             console.print(f"[red]{exc}[/red]")
 
     if args.export_png:
         try:
-            exporter.export_png(banner, Path(args.export_png), gradient)
+            _export_with_progress(
+                console,
+                label="PNG",
+                target=args.export_png,
+                work=lambda callback: exporter.export_png(
+                    banner,
+                    Path(args.export_png),
+                    progress_callback=callback,
+                ),
+            )
             console.print(f"[green]PNG ->[/green] {args.export_png}")
         except Exception as exc:
             console.print(f"[red]{exc}[/red]")
 
     if args.export_gif:
         try:
-            exporter.export_gif(
-                banner,
-                Path(args.export_gif),
-                duration=args.gif_duration,
-                fps=args.gif_fps,
+            _export_with_progress(
+                console,
+                label="GIF",
+                target=args.export_gif,
+                work=lambda callback: exporter.export_gif(
+                    banner,
+                    Path(args.export_gif),
+                    duration=args.gif_duration,
+                    fps=args.gif_fps,
+                    progress_callback=callback,
+                ),
             )
             console.print(f"[green]GIF ->[/green] {args.export_gif}")
         except Exception as exc:
@@ -206,6 +229,52 @@ def _wrap(content, border: bool, title: str | None):
     if border:
         return Panel(content, border_style="cyan", box=box.ROUNDED, title=title)
     return content
+
+
+def _export_with_progress(console: Console, *, label: str, target: str, work) -> None:
+    progress = Progress(
+        TextColumn("[bold cyan]{task.fields[label]}[/bold cyan]"),
+        TextColumn("{task.fields[bar]}"),
+        TaskProgressColumn(),
+        TextColumn("{task.fields[status]}"),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+        transient=True,
+    )
+    with progress:
+        task_id = progress.add_task(
+            "export",
+            total=100,
+            completed=0,
+            label=f"{label} export",
+            bar=_ascii_bar(0.0),
+            status=f"Preparing {target}",
+        )
+
+        def report(fraction: float, status: str) -> None:
+            completed = max(0.0, min(100.0, fraction * 100.0))
+            progress.update(
+                task_id,
+                completed=completed,
+                bar=_ascii_bar(completed / 100.0),
+                status=status,
+            )
+            progress.refresh()
+
+        work(report)
+        progress.update(
+            task_id,
+            completed=100.0,
+            bar=_ascii_bar(1.0),
+            status="Done",
+        )
+
+
+def _ascii_bar(fraction: float, width: int = 32) -> str:
+    fraction = max(0.0, min(1.0, fraction))
+    filled = min(width, max(0, round(fraction * width)))
+    return f"[{'=' * filled}{'-' * (width - filled)}]"
 
 
 def _list_presets(console: Console, mgr: PresetManager) -> None:

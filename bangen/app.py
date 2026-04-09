@@ -4,13 +4,11 @@ from __future__ import annotations
 
 
 def main() -> None:
-    from bangen.cli.parser import has_cli_args, parse_args
+    from bangen.cli.parser import app as cli_app
+    from bangen.cli.parser import has_cli_args
 
     if has_cli_args():
-        args = parse_args()
-        from bangen.cli.runner import run_cli
-
-        run_cli(args)
+        cli_app()
     else:
         from bangen.presets.manager import PresetManager
         from bangen.rendering.engine import RenderEngine
@@ -18,5 +16,5 @@ def main() -> None:
 
         engine = RenderEngine()
         pm = PresetManager()
-        app = TUIApp(engine, pm)
-        app.run()
+        tui_app = TUIApp(engine, pm)
+        tui_app.run()

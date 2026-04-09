@@ -1,13 +1,13 @@
-"""Pulse effect — brightness oscillation via the BrightnessModifier protocol."""
+"""Pulse effect — brightness oscillation via the effect pipeline."""
 
 from __future__ import annotations
 
 import math
 
-from bangen.effects.base import BrightnessModifier, Effect, EffectConfig
+from bangen.effects.base import Effect, EffectConfig
 
 
-class PulseEffect(Effect, BrightnessModifier):
+class PulseEffect(Effect):
     """Oscillates global rendering brightness using a sine wave."""
 
     def __init__(
@@ -28,7 +28,16 @@ class PulseEffect(Effect, BrightnessModifier):
         # Content is not modified; brightness is driven via brightness()
         return lines
 
-    def brightness(self, t: float) -> float:
+    def brightness(
+        self,
+        t: float,
+        *,
+        row: int,
+        col: int,
+        char: str,
+        lines: list[str],
+    ) -> float:
+        del row, col, char, lines
         phase = math.sin(t * self.config.speed * math.pi)
         # Normalise sin from [-1, 1] to [min_brightness, max_brightness]
         normalised = (phase + 1.0) / 2.0

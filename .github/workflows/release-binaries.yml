@@ -1,0 +1,180 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from pyproject.toml
+        id: meta
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import tomllib
+          from pathlib import Path
+          data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          version = data["project"]["version"]
+          print(f"version={version}")
+          print(f"tag=v{version}")
+          PY
+
+      - name: Verify pushed tag matches project version
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "v${{ steps.meta.outputs.version }}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match pyproject version v${{ steps.meta.outputs.version }}"
+            exit 1
+          fi
+
+      - name: Ensure release exists
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+  build:
+    needs: metadata
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            artifact_name: bangen
+            asset_ext: ""
+          - os: macos-latest
+            platform: macos-universal2
+            artifact_name: bangen
+            asset_ext: ""
+          - os: windows-latest
+            platform: windows-x86_64
+            artifact_name: bangen.exe
+            asset_ext: ".exe"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          # Caches the pip download cache AND the venv if requirements haven't changed
+          cache: "pip"
+
+      - name: Compute cache keys
+        id: keys
+        shell: bash
+        run: |
+          # Stable hash over all dependency-defining files
+          echo "deps_hash=${{ hashFiles('pyproject.toml', '**/requirements*.txt') }}" >> "$GITHUB_OUTPUT"
+          echo "py_ver=3.11" >> "$GITHUB_OUTPUT"
+          echo "runner=${{ matrix.os }}" >> "$GITHUB_OUTPUT"
+
+      # Cache the pip wheel cache (avoids re-downloading wheels across runs)
+      - name: Cache pip wheels
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/AppData/Local/pip/Cache
+            ~/Library/Caches/pip
+          key: pip-wheels-${{ steps.keys.outputs.runner }}-${{ steps.keys.outputs.py_ver }}-${{ steps.keys.outputs.deps_hash }}
+          restore-keys: |
+            pip-wheels-${{ steps.keys.outputs.runner }}-${{ steps.keys.outputs.py_ver }}-
+            pip-wheels-${{ steps.keys.outputs.runner }}-
+
+      # Cache the installed venv so pip install is a no-op on cache hit
+      - name: Cache virtualenv
+        id: venv-cache
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ steps.keys.outputs.runner }}-${{ steps.keys.outputs.py_ver }}-${{ steps.keys.outputs.deps_hash }}
+
+      - name: Install build dependencies
+        if: steps.venv-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate || . .venv/Scripts/activate
+          python -m pip install --upgrade pip --quiet
+          python -m pip install . pyinstaller --quiet
+
+      - name: Activate venv (Unix)
+        if: runner.os != 'Windows'
+        run: echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Activate venv (Windows)
+        if: runner.os == 'Windows'
+        run: echo "$env:GITHUB_WORKSPACE\.venv\Scripts" >> $env:GITHUB_PATH
+
+      # PyInstaller caches its bootloader and analysis results in __pycache__ / spec cache
+      - name: Cache PyInstaller work dir
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/
+            ~/.cache/pyinstaller
+            ~/AppData/Roaming/pyinstaller
+          key: pyinstaller-${{ steps.keys.outputs.runner }}-${{ steps.keys.outputs.py_ver }}-${{ steps.keys.outputs.deps_hash }}-${{ hashFiles('bangen/**/*.py') }}
+          restore-keys: |
+            pyinstaller-${{ steps.keys.outputs.runner }}-${{ steps.keys.outputs.py_ver }}-${{ steps.keys.outputs.deps_hash }}-
+            pyinstaller-${{ steps.keys.outputs.runner }}-${{ steps.keys.outputs.py_ver }}-
+
+      - name: Build standalone binary
+        shell: bash
+        run: |
+          pyinstaller \
+            --noconfirm \
+            --onefile \
+            --name bangen \
+            --distpath dist \
+            --workpath build \
+            --clean \
+            --collect-submodules bangen \
+            --collect-all pyfiglet \
+            --collect-all rich \
+            --collect-all PIL \
+            bangen/__main__.py
+
+      - name: Prepare release asset
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          cp "dist/${{ matrix.artifact_name }}" \
+             "release-assets/bangen-${{ needs.metadata.outputs.tag }}-${{ matrix.platform }}${{ matrix.asset_ext }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bangen-${{ needs.metadata.outputs.tag }}-${{ matrix.platform }}
+          path: release-assets/*
+          compression-level: 9
+          if-no-files-found: error
+
+      - name: Upload asset to GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.metadata.outputs.tag }}
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          

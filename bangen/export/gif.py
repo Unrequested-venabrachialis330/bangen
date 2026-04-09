@@ -76,7 +76,13 @@ def normalize_gif_settings(duration: float, fps: float) -> GifRenderSettings:
     )
 
 
-def export_gif(path: Path, banner: "Banner", duration: float, fps: float) -> None:
+def export_gif(
+    path: Path,
+    banner: "Banner",
+    duration: float,
+    fps: float,
+    progress_callback=None,
+) -> None:
     Image, ImageDraw, ImageFont = _pil()
     settings = normalize_gif_settings(duration, fps)
     renderer = BannerPixelRenderer(banner)
@@ -84,27 +90,44 @@ def export_gif(path: Path, banner: "Banner", duration: float, fps: float) -> Non
     metrics = measure_font(font)
     image_size = canvas_size(renderer, metrics)
 
-    rgba_frames = [
-        render_rgba_frame(
-            Image=Image,
-            ImageDraw=ImageDraw,
-            renderer=renderer,
-            font=font,
-            metrics=metrics,
-            image_size=image_size,
-            t=frame_index / settings.fps,
-            antialias=False,
+    if progress_callback is not None:
+        progress_callback(0.02, "Preparing GIF export")
+
+    rgba_frames = []
+    for frame_index in range(settings.frame_count):
+        rgba_frames.append(
+            render_rgba_frame(
+                Image=Image,
+                ImageDraw=ImageDraw,
+                renderer=renderer,
+                font=font,
+                metrics=metrics,
+                image_size=image_size,
+                t=frame_index / settings.fps,
+                antialias=False,
+            )
         )
-        for frame_index in range(settings.frame_count)
-    ]
+        if progress_callback is not None:
+            render_progress = (frame_index + 1) / settings.frame_count
+            progress_callback(0.05 + (render_progress * 0.6), "Rendering GIF frames")
 
     # Build one palette from sampled frames across the animation so color-heavy
     # effects don't get quantized against a palette that only matches frame 0.
+    if progress_callback is not None:
+        progress_callback(0.7, "Building shared GIF palette")
     palette = _build_palette_reference(Image, rgba_frames)
-    frames = [
-        _rgba_to_gif_frame(Image, rgba, palette_frame=palette) for rgba in rgba_frames
-    ]
+    frames = []
+    for frame_index, rgba in enumerate(rgba_frames):
+        frames.append(_rgba_to_gif_frame(Image, rgba, palette_frame=palette))
+        if progress_callback is not None:
+            quantize_progress = (frame_index + 1) / settings.frame_count
+            progress_callback(
+                0.75 + (quantize_progress * 0.2),
+                "Quantizing GIF frames",
+            )
 
+    if progress_callback is not None:
+        progress_callback(0.97, "Writing GIF file")
     frames[0].save(
         path,
         save_all=True,
@@ -115,6 +138,8 @@ def export_gif(path: Path, banner: "Banner", duration: float, fps: float) -> Non
         disposal=2,
         optimize=False,
     )
+    if progress_callback is not None:
+        progress_callback(1.0, "GIF export complete")
 
 
 def canvas_size(renderer: BannerPixelRenderer, metrics: FontMetrics) -> tuple[int, int]:

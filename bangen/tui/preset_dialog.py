@@ -8,7 +8,7 @@ from typing import Callable
 
 from rich import box
 from rich.align import Align
-from rich.console import Group
+from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -84,7 +84,7 @@ class PresetDialog:
         body.add_row("Load", self._field_value("load", "Load preset", action=True))
         body.add_row("Cancel", self._field_value("cancel", "Close dialog", action=True))
 
-        footer: list[object] = [body]
+        footer: list[RenderableType] = [body]
 
         if self.error_message:
             footer.append(Text(self.error_message, style="bold red"))

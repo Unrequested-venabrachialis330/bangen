@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import time
 from copy import deepcopy
 from pathlib import Path
 from threading import Thread
 
 from rich import box
 from rich.align import Align
-from rich.console import Group
+from rich.console import Group, RenderableType
 from rich.panel import Panel
-from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
@@ -40,6 +40,9 @@ class ExportDialog:
         self.error_message = ""
         self.warning_message = ""
         self.confirm_overwrite = False
+        self.progress = 0.0
+        self.progress_status = ""
+        self.progress_started_at = 0.0
 
         self._worker: Thread | None = None
         self._worker_error: str | None = None
@@ -65,10 +68,10 @@ class ExportDialog:
         body.add_row("Export", self._field_value("export", "Start export", action=True))
         body.add_row("Cancel", self._field_value("cancel", "Close dialog", action=True))
 
-        footer: list[object] = [body]
+        footer: list[RenderableType] = [body]
 
-        if self.loading and self.format == "gif":
-            footer.append(Spinner("dots", text="Rendering GIF frames..."))
+        if self.loading:
+            footer.append(self._progress_text())
 
         if self.warning_message:
             footer.append(Text(self.warning_message, style="bold yellow"))
@@ -143,6 +146,9 @@ class ExportDialog:
 
             if self.format == "gif":
                 self.loading = True
+                self.progress = 0.0
+                self.progress_status = "Preparing GIF export"
+                self.progress_started_at = time.monotonic()
                 self._worker_error = None
                 self._worker_result = None
                 self._worker = Thread(
@@ -154,11 +160,30 @@ class ExportDialog:
                 return
 
             if self.format == "png":
-                self.exporter.export_png(self.banner, target)
+                self.loading = True
+                self.progress = 0.0
+                self.progress_status = "Preparing PNG export"
+                self.progress_started_at = time.monotonic()
+                self._worker_error = None
+                self._worker_result = None
+                self._worker = Thread(
+                    target=self._run_png_export,
+                    args=(target,),
+                    daemon=True,
+                )
             else:
-                self.exporter.export_txt(self.banner, target)
-            self.status_message = f"✓ Exported to {target}"
-            self.closed = True
+                self.loading = True
+                self.progress = 0.0
+                self.progress_status = "Preparing TXT export"
+                self.progress_started_at = time.monotonic()
+                self._worker_error = None
+                self._worker_result = None
+                self._worker = Thread(
+                    target=self._run_txt_export,
+                    args=(target,),
+                    daemon=True,
+                )
+            self._worker.start()
         except Exception as exc:
             self.error_message = str(exc)
 
@@ -169,6 +194,29 @@ class ExportDialog:
                 target,
                 duration=self.duration,
                 fps=self.fps,
+                progress_callback=self._set_progress,
+            )
+            self._worker_result = str(target)
+        except Exception as exc:
+            self._worker_error = str(exc)
+
+    def _run_png_export(self, target: Path) -> None:
+        try:
+            self.exporter.export_png(
+                self.banner,
+                target,
+                progress_callback=self._set_progress,
+            )
+            self._worker_result = str(target)
+        except Exception as exc:
+            self._worker_error = str(exc)
+
+    def _run_txt_export(self, target: Path) -> None:
+        try:
+            self.exporter.export_txt(
+                self.banner,
+                target,
+                progress_callback=self._set_progress,
             )
             self._worker_result = str(target)
         except Exception as exc:
@@ -182,6 +230,12 @@ class ExportDialog:
         worker.join(timeout=0)
         self._worker = None
         self.loading = False
+        self.progress = 1.0 if self._worker_result is not None else self.progress
+        self.progress_status = (
+            "Export complete"
+            if self._worker_result is not None
+            else self.progress_status
+        )
 
         if self._worker_error is not None:
             self.error_message = self._worker_error
@@ -192,6 +246,10 @@ class ExportDialog:
             self.status_message = f"✓ Exported to {self._worker_result}"
             self._worker_result = None
             self.closed = True
+
+    def _set_progress(self, fraction: float, status: str) -> None:
+        self.progress = max(0.0, min(1.0, fraction))
+        self.progress_status = status
 
     def _move(self, delta: int) -> None:
         fields = self._active_fields()
@@ -323,6 +381,25 @@ class ExportDialog:
         if requested_frames > MAX_GIF_FRAMES:
             return Text(f"{frame_text} (capped)", style="yellow")
         return Text(frame_text, style="white")
+
+    def _progress_text(self) -> Text:
+        elapsed = max(0.0, time.monotonic() - self.progress_started_at)
+        percentage = int(round(self.progress * 100))
+        eta = 0.0
+        if self.progress > 0:
+            eta = max(0.0, (elapsed / self.progress) - elapsed)
+
+        width = 26
+        filled = max(0, min(width, round(self.progress * width)))
+        bar = f"[{'=' * filled}{'-' * (width - filled)}]"
+        text = Text()
+        text.append(bar, style="cyan")
+        text.append(f" {percentage:3d}%  ", style="bold cyan")
+        text.append(f"elapsed {elapsed:4.1f}s  ", style="dim")
+        text.append(f"eta {eta:4.1f}s", style="dim")
+        if self.progress_status:
+            text.append(f"\n{self.progress_status}", style="white")
+        return text
 
     def _help_text(self) -> Text:
         help_text = Text()

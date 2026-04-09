@@ -3,7 +3,7 @@
 ![App Banner](demo/app_banner.gif)
 
 **Bangen** is an ASCII banner renderer built on `pyfiglet`, `rich`, and `Pillow`.
-It gives you a fast live **TUI**, a composable effect pipeline, JSON presets, and export support for `TXT`, `PNG`, `GIF`, and `HTML`.
+It gives you a fast live **TUI**, a composable effect pipeline, JSON presets, and export support for `TXT`, `PNG`, and `GIF`.
 
 Built for terminal art, title cards, intros, and animated text that still feels sharp when exported.
 
@@ -15,6 +15,8 @@ Built for terminal art, title cards, intros, and animated text that still feels 
 - Static and animated banner rendering
 - Transparent `PNG` and animated transparent `GIF` export
 - Plain `TXT` export with exact ASCII output
+- CLI export progress with percentage, elapsed time, ETA, and status text
+- Typer-powered CLI help with cleaner option formatting and examples
 - Multi-stop gradients with horizontal or vertical interpolation
 - Built-in presets plus user presets stored in `~/.bangen/presets/`
 - Effect library grouped into motion, visual, temporal, distortion, and signature tiers
@@ -29,14 +31,20 @@ bangen "SYSTEM READY" --font slant --gradient "#7c3aed:#06b6d4" --effect glow --
 ## Setup 🛠️
 
 ```bash
-git clone https://github.com/pro-grammer-SD/bangen.git
+git clone https://github.com/programmersd21/bangen.git
 cd bangen
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
 
-Requirements:
+🎯 Or download the prebuilts:
+
+https://github.com/programmersd21/bangen/releases/latest
+
+---
+
+### Requirements:
 
 - Python `3.11+`
 - Pillow is included in the base install
@@ -103,9 +111,12 @@ Press `e` inside the TUI to open the exporter.
 - Edit the output path directly
 - Adjust GIF-only `duration` and `fps`
 - Auto-update the file extension when the format changes
+- Show live export progress in the modal with percentage, elapsed time, ETA, and stage text
 - Confirm overwrite when the target file already exists
 
 ### CLI ⌨️
+
+The CLI is powered by `Typer`, so `bangen --help` now presents a cleaner option list and examples while keeping the same flag-based workflow.
 
 #### Basic Rendering
 
@@ -138,8 +149,18 @@ bangen "HELLO" --ai "retro CRT hacker title"
 bangen "HELLO" --export-txt banner.txt
 bangen "HELLO" --export-png banner.png
 bangen "HELLO" --effect wave --effect glow --export-gif banner.gif --gif-duration 3 --gif-fps 20
-bangen "HELLO" --export-html banner.html
 ```
+
+CLI exports show a live progress bar with percentage, elapsed time, ETA, and the current export stage.
+
+## Releases 📦
+
+GitHub Actions builds standalone binaries for `Windows`, `macOS`, and `Linux` and uploads them to the matching GitHub release.
+
+- asset names follow the project version from `pyproject.toml`
+- release files include the platform in the filename
+- the release workflow expects a tag matching the project version, for example `v2.2.1`
+- release builds explicitly bundle the TUI package, effect modules, `pyfiglet` font assets, Rich, and Pillow runtime pieces so the standalone app works outside a Python environment
 
 #### Screensaver
 

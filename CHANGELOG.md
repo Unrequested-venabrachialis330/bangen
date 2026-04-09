@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.2.1]
+
+### Added
+- CLI export progress display with a live progress bar, percentage, elapsed time, ETA, and stage text
+- Typer-powered CLI help output with cleaner option formatting and examples
+- GitHub Actions release workflow for standalone `Windows`, `macOS`, and `Linux` binaries uploaded to GitHub releases using the version from `pyproject.toml`
+
+### Changed
+- Removed HTML export support from the codebase, CLI surface, and documentation
+- GIF export now reports granular progress across frame rendering, palette construction, quantization, and file writing
+- Migrated the CLI help/parser layer from `argparse` to `Typer` while keeping the existing flag-oriented workflow
+- TUI export modal now displays live export progress with percentage, elapsed time, ETA, and stage text during rendering
+- Standalone release binaries now collect the full `bangen` package plus `pyfiglet`, Rich, and Pillow runtime assets so the packaged TUI app resolves imports correctly on `Windows`, `macOS`, and `Linux`
+- Project version metadata now reflects `2.2.1`
+
 ## [2.2.0]
 
 ### Added
@@ -42,7 +57,7 @@
 - Full-screen interactive TUI with split controls/preview layout (`TUIApp`)
 - Full CLI via `argparse` with all features accessible from the terminal
 - JSON preset system stored in `~/.bangen/presets/` (8 built-in presets)
-- Multi-format export: TXT, HTML (inline styles), PNG, animated GIF
+- Multi-format export: TXT, PNG, animated GIF
 - External FIGlet font loading via `--font-dir`
 - AI rule-based prompt-to-style suggester
 

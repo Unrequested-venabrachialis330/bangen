@@ -168,18 +168,20 @@ class WipeEffect(Effect):
                     result.append(" " * len(line))
             return result
 
-        result: list[str] = []
+        horizontal_result: list[str] = []
         start = self._min_col
         width = max(1, (self._max_col - self._min_col) + 1)
         cutoff_col = start + round(width * progress)
         for line in lines:
             if not line:
-                result.append(line)
+                horizontal_result.append(line)
                 continue
             padded = line.ljust(self._base_width)
             cutoff = max(0, min(len(padded), cutoff_col))
-            result.append(padded[:cutoff] + (" " * max(0, len(padded) - cutoff)))
-        return result
+            horizontal_result.append(
+                padded[:cutoff] + (" " * max(0, len(padded) - cutoff))
+            )
+        return horizontal_result
 
 
 class StaggerEffect(Effect):

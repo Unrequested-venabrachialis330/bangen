@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from bangen.presets.manager import Preset
 
 
 @dataclass
@@ -185,7 +188,7 @@ def suggest_from_prompt(prompt: str) -> StyleSuggestion:
     )
 
 
-def suggest_to_preset(name: str, prompt: str) -> "Preset":  # noqa: F821
+def suggest_to_preset(name: str, prompt: str) -> "Preset":
     from bangen.presets.manager import Preset
 
     s = suggest_from_prompt(prompt)

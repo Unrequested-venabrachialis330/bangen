@@ -12,7 +12,7 @@ from bangen.effects.base import RGB, CellStyle
 from bangen.effects.utils import clamp, scale_color
 
 if TYPE_CHECKING:
-    from bangen.effects.base import Effect
+    from bangen.effects.base import Effect, RasterLayer
     from bangen.gradients.gradient import Gradient
 
 
@@ -106,7 +106,7 @@ class Banner:
         opacity = clamp(opacity)
         color = scale_color(color, max(0.0, brightness))
 
-        overlays = []
+        overlays: list["RasterLayer"] = []
         for effect in self._effects:
             overlays.extend(
                 effect.raster_layers(

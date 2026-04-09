@@ -13,7 +13,7 @@ from rich.live import Live
 from bangen.effects import EffectConfig, build_effect
 from bangen.gradients.gradient import Gradient
 from bangen.rendering.banner import Banner
-from bangen.rendering.engine import DEFAULT_FONT, RenderEngine, PRESET_FONTS
+from bangen.rendering.engine import DEFAULT_FONT, PRESET_FONTS, RenderEngine
 
 _SCREENSAFE_TIERS: dict[str, tuple[str, ...]] = {
     "motion": ("wave", "vertical_wave", "bounce", "drift", "shake"),
@@ -119,7 +119,9 @@ def run_screensaver(
 
                 assert scene is not None
                 frame = scene.banner.render_frame(now - scene.started_at)
-                live.update(_centered(frame, width=terminal_size[0], height=terminal_size[1]))
+                live.update(
+                    _centered(frame, width=terminal_size[0], height=terminal_size[1])
+                )
                 live.refresh()
                 time.sleep(0.05)
     except KeyboardInterrupt:
@@ -345,5 +347,7 @@ def _effect_settings(
     return EffectConfig(speed=speed, amplitude=amplitude, frequency=frequency), kwargs
 
 
-def _centered(content: ConsoleRenderable, *, width: int, height: int) -> ConsoleRenderable:
+def _centered(
+    content: ConsoleRenderable, *, width: int, height: int
+) -> ConsoleRenderable:
     return Align.center(content, vertical="middle", width=width, height=height)
