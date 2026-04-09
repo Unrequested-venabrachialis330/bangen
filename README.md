@@ -2,12 +2,39 @@
 
 ![App Banner](demo/app_banner.gif)
 
+---
+
 **Bangen** is an ASCII banner renderer built on `pyfiglet`, `rich`, and `Pillow`.
 It gives you a fast live **TUI**, a composable effect pipeline, JSON presets, and export support for `TXT`, `PNG`, and `GIF`.
 
 Built for terminal art, title cards, intros, and animated text that still feels sharp when exported.
 
+---
+
+## 🌿 Screenshot
+
 ![Screenshot](demo/screenshot.png)
+
+---
+
+## Star History ⭐
+
+<a href="https://www.star-history.com/#programmersd21/bangen&Date">
+  <picture>
+    <source
+      media="(prefers-color-scheme: dark)"
+      srcset="https://api.star-history.com/svg?repos=programmersd21/bangen&type=Date&theme=dark"
+    />
+    <source
+      media="(prefers-color-scheme: light)"
+      srcset="https://api.star-history.com/svg?repos=programmersd21/bangen&type=Date&theme=light"
+    />
+    <img
+      alt="Star History Chart"
+      src="https://api.star-history.com/svg?repos=programmersd21/bangen&type=Date"
+    />
+  </picture>
+</a>
 
 ## Why It Stands Out ⚡
 
