@@ -1,194 +1,116 @@
-name: Build Bangen (Nuitka)
+name: Build & Release Bangen
 
 on:
+  workflow_dispatch:
   push:
     tags:
-      - "v*"
-  workflow_dispatch:
+      - "*.*.*"
 
-permissions:
-  contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # --- Tagging Job ---
-  # Ensures a version tag exists based on pyproject.toml if triggered from a branch
-  tag:
-    if: github.ref_type == 'branch'
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.VERSION }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Extract version
-        id: version
-        run: |
-          VERSION=$(python - <<EOF
-          import tomllib, pathlib
-          data = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
-          print(data["project"]["version"])
-          EOF
-          )
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Create tag if missing
-        run: |
-          TAG_NAME="v${{ steps.version.outputs.VERSION }}"
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            echo "Tag $TAG_NAME already exists."
-          else
-            git config user.name "github-actions"
-            git config user.email "github-actions@github.com"
-            git tag "$TAG_NAME"
-            git push origin "$TAG_NAME"
-          fi
-
-  # --- Build Job ---
-  # Compiles the application into a single executable for Linux, macOS, and Windows
   build:
-    needs: tag
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             name: linux
-          - os: macos-latest
-            name: macos
           - os: windows-latest
             name: windows
-    runs-on: ${{ matrix.os }}
+          - os: macos-latest
+            name: macos
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract Metadata & Validate
-        id: meta
-        shell: bash
-        run: |
-          PYPROJECT_VERSION=$(python - <<EOF
-          import tomllib, pathlib
-          data = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
-          print(data["project"]["version"])
-          EOF
-          )
-
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF_NAME#v}
-          else
-            VERSION=$PYPROJECT_VERSION
-          fi
-
-          SHA=$(git rev-parse --short HEAD)
-          DEPS_HASH=$(python - <<EOF
-          import hashlib, pathlib
-          p = pathlib.Path("pyproject.toml")
-          print(hashlib.sha256(p.read_bytes()).hexdigest()[:16])
-          EOF
-          )
-
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "SHA=$SHA" >> $GITHUB_OUTPUT
-          echo "CACHE_KEY=${{ runner.os }}-$VERSION-$DEPS_HASH" >> $GITHUB_OUTPUT
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
-      - name: Cache Nuitka
+      - name: Cache pip
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/pip
-            ~/.cache/Nuitka
-            ~/Library/Caches/Nuitka
-            ~\AppData\Local\Nuitka\Nuitka\Cache
-          key: nuitka-${{ steps.meta.outputs.CACHE_KEY }}
-          restore-keys: |
-            nuitka-${{ runner.os }}-
+            ~/AppData/Local/pip/Cache
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements*.txt') }}
+          restore-keys: pip-${{ runner.os }}-
 
-      - name: Install System Dependencies (Linux)
+      - name: Install system deps (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential patchelf
+        run: sudo apt-get update && sudo apt-get install -y patchelf
 
-      - name: Install System Dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: xcode-select -p || xcode-select --install || true
-
-      - name: MSVC Setup (Windows)
+      - name: MSVC setup (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install -U pip wheel
-          pip install "setuptools<72"
-          pip install nuitka[onefile]
-          pip install .
-
-      - name: Create Entrypoint Script
+      - name: Install Python deps
         shell: bash
         run: |
-          cat > _entry.py << 'EOF'
-          from bangen.app import main
-          if __name__ == "__main__":
-              main()
-          EOF
+          python -m pip install -U pip wheel nuitka
+          [[ -f requirements.txt ]] && pip install -r requirements.txt || true
+
+      - name: Write entrypoint
+        shell: bash
+        run: |
+          printf 'from bangen.app import main\nif __name__ == "__main__":\n    main()\n' > _entry.py
 
       - name: Build with Nuitka
         shell: bash
         run: |
+          JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
           python -m nuitka \
             --onefile \
-            --jobs=auto \
+            --lto=thin \
+            --jobs="$JOBS" \
             --assume-yes-for-downloads \
             --output-dir=build \
             --output-filename=bangen \
-            --nofollow-import-to=tkinter \
-            --nofollow-import-to=unittest \
-            --nofollow-import-to=test \
-            --python-flag=no_asserts \
-            --python-flag=no_docstrings \
-            --python-flag=isolated \
-            --onefile-tempdir-spec="{TEMP}/bangen" \
-            --plugin-enable=anti-bloat \
+            --follow-imports \
+            --nofollow-import-to=tkinter,unittest,test,distutils,setuptools,pkg_resources \
+            --python-flag=no_asserts,no_docstrings,isolated \
+            --onefile-tempdir-spec="{CACHE_DIR}/bangen/${{ github.ref_name }}" \
             _entry.py
 
-      - name: Stage Artifact
+      - name: Package artifact
         shell: bash
         run: |
           mkdir -p dist
-          NAME="bangen-${{ matrix.name }}-${{ steps.meta.outputs.VERSION }}-${{ steps.meta.outputs.SHA }}"
+          NAME="bangen-${{ matrix.name }}-${{ github.ref_name }}"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            mv build/bangen.exe "dist/$NAME.exe"
+            mv build/bangen.exe dist/"$NAME.exe"
+            (cd dist && zip "$NAME.zip" "$NAME.exe" && rm "$NAME.exe")
           else
-            mv build/bangen "dist/$NAME"
+            mv build/bangen dist/"$NAME"
+            (cd dist && tar -czf "$NAME.tar.gz" "$NAME" && rm "$NAME")
           fi
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}-build
           path: dist/*
 
-  # --- Release Job ---
-  # Consolidates all builds and creates a draft GitHub Release
   release:
-    needs: [tag, build]
+    name: Publish Release
+    needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required for action-gh-release to create releases
+
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
-      - name: Create Draft Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.tag.outputs.version }}
-          name: Bangen v${{ needs.tag.outputs.version }}
-          draft: true
+          tag_name: ${{ github.ref_name }}
+          name: Bangen ${{ github.ref_name }}
           files: artifacts/*
