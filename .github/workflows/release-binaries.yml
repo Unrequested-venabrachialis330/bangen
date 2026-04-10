@@ -186,7 +186,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Bangen ${{ github.ref_name }}
-          draft: true
           body: |
             ## 🚀 Changes
             ${{ steps.changelog.outputs.CHANGELOG }}
