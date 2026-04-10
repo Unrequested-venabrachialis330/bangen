@@ -42,9 +42,16 @@ jobs:
           key: pip-${{ runner.os }}-${{ hashFiles('requirements*.txt') }}
           restore-keys: pip-${{ runner.os }}-
 
+      - name: Cache Nuitka
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Nuitka
+          key: nuitka-${{ runner.os }}-${{ hashFiles('**/*.py') }}
+          restore-keys: nuitka-${{ runner.os }}-
+
       - name: Install system deps (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y patchelf
+        run: sudo apt-get install -y patchelf
 
       - name: MSVC setup (Windows)
         if: runner.os == 'Windows'
@@ -56,14 +63,10 @@ jobs:
           python -m pip install -U pip wheel nuitka zstandard
           [[ -f requirements.txt ]] && pip install -r requirements.txt || true
 
-      - name: Write entrypoint
-        shell: bash
-        run: |
-          printf 'from bangen.app import main\nif __name__ == "__main__":\n    main()\n' > _entry.py
-
       - name: Build with Nuitka
         shell: bash
         run: |
+          printf 'from bangen.app import main\nif __name__ == "__main__":\n    main()\n' > _entry.py
           python -m nuitka \
             --mode=onefile \
             --assume-yes-for-downloads \
@@ -81,7 +84,8 @@ jobs:
           NAME="bangen-${{ matrix.name }}-${{ github.ref_name }}"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             mv build/bangen.exe dist/"$NAME.exe"
-            (cd dist && zip "$NAME.zip" "$NAME.exe" && rm "$NAME.exe")
+            powershell -Command "Compress-Archive -Path dist\\$NAME.exe -DestinationPath dist\\$NAME.zip"
+            rm dist/"$NAME.exe"
           else
             mv build/bangen dist/"$NAME"
             (cd dist && tar -czf "$NAME.tar.gz" "$NAME" && rm "$NAME")
@@ -91,6 +95,7 @@ jobs:
         with:
           name: ${{ matrix.name }}-build
           path: dist/*
+          retention-days: 1
 
   release:
     name: Publish Release
@@ -104,6 +109,11 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum * > SHA256SUMS.txt
 
       - uses: softprops/action-gh-release@v2
         with:
