@@ -28,10 +28,13 @@ jobs:
           print(f"tag=v{v}")
           PY
 
-      - uses: softprops/action-gh-release@v2
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: ${{ steps.meta.outputs.tag }}
+          draft: false
+          prerelease: false
 
   build:
     needs: metadata
@@ -42,13 +45,15 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux-x86_64
-            exe: bangen
+            extra_build_flags: --clang
+
           - os: macos-latest
             platform: macos-universal2
-            exe: bangen
+            extra_build_flags: --clang --macos-target-arch=universal
+
           - os: windows-latest
             platform: windows-x86_64
-            exe: bangen.exe
+            extra_build_flags: ""
 
     steps:
       - uses: actions/checkout@v4
@@ -56,29 +61,105 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          # No cache: pip — we cache the entire installed env in Layer 1,
+          # which is strictly better (zero pip activity on a cache hit).
 
-      # 🔥 Cache Nuitka + compiler artifacts
-      - name: Cache Nuitka + compiler
+      # ── Layer 1: installed Python environment ────────────────────────────
+      # Caches the full Python + site-packages directory. On a hit, pip is
+      # never invoked at all. Keyed on pyproject.toml only — bangen itself
+      # is installed with -e (editable) so source changes are always live
+      # without busting this cache.
+      - name: Cache pip environment
+        id: pip-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.pythonLocation }}
+          key: pip-env-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}
+          # Intentionally no restore-keys: a partial env restore causes subtle
+          # import errors that are harder to debug than a clean install.
+
+      - name: Install dependencies
+        if: steps.pip-cache.outputs.cache-hit != 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . nuitka
+
+      # ── Layer 2: sccache (C compiler output cache) ───────────────────────
+      # Nuitka translates Python → C, then compiles the C with clang/MSVC.
+      # sccache caches the compiled C object files keyed on content hash,
+      # so unchanged modules are never recompiled.
+      #
+      # Linux / macOS: we shim the clang binary so every compiler call Nuitka
+      # makes goes through sccache transparently. The shim must land before
+      # /usr/bin in PATH — /usr/local/bin satisfies this on both runners.
+      #
+      # Windows: Nuitka calls cl.exe (MSVC) through its own Scons backend in
+      # a way that cannot be intercepted with a shim. Layer 3 carries Windows.
+      - uses: mozilla-actions/sccache-action@v0.0.5
+
+      - name: Configure sccache
+        shell: bash
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true"  >> "$GITHUB_ENV"
+          echo "SCCACHE_CACHE_SIZE=2G"     >> "$GITHUB_ENV"
+
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            REAL_CLANG="$(which clang)"
+            REAL_CLANGXX="$(which clang++)"
+            printf '#!/bin/sh\nexec sccache %s "$@"\n' "$REAL_CLANG"   | sudo tee /usr/local/bin/clang   > /dev/null
+            printf '#!/bin/sh\nexec sccache %s "$@"\n' "$REAL_CLANGXX" | sudo tee /usr/local/bin/clang++ > /dev/null
+            sudo chmod +x /usr/local/bin/clang /usr/local/bin/clang++
+
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            REAL_CLANG="$(xcrun -f clang)"
+            REAL_CLANGXX="$(xcrun -f clang++)"
+            printf '#!/bin/sh\nexec sccache %s "$@"\n' "$REAL_CLANG"   | sudo tee /usr/local/bin/clang   > /dev/null
+            printf '#!/bin/sh\nexec sccache %s "$@"\n' "$REAL_CLANGXX" | sudo tee /usr/local/bin/clang++ > /dev/null
+            sudo chmod +x /usr/local/bin/clang /usr/local/bin/clang++
+          fi
+
+      # ── Layer 3: Nuitka bytecode + download cache ─────────────────────────
+      # Caches two things inside Nuitka's cache dir:
+      #   • Python→C translation results  (expensive, source-sensitive)
+      #   • Onefile bootstrap downloads   (AppImage on Linux, etc. — one-time)
+      #
+      # Three-tier restore-key cascade:
+      #   1. Exact hit  — source + deps unchanged, fully warm
+      #   2. Deps hit   — only deps unchanged; translation cache partially warm
+      #   3. OS hit     — bootstrap downloads reused; compilation starts cold
+      - name: Set Nuitka cache dir
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            echo "NUITKA_CACHE_DIR=${LOCALAPPDATA}/Nuitka" >> "$GITHUB_ENV"
+          else
+            echo "NUITKA_CACHE_DIR=${HOME}/.cache/Nuitka"  >> "$GITHUB_ENV"
+          fi
+
+      - name: Cache Nuitka artifacts
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/Nuitka
-            ~/.ccache
             ~/AppData/Local/Nuitka
-            ~/AppData/Local/ccache
-          key: nuitka-${{ runner.os }}-3.11-${{ hashFiles('pyproject.toml', 'bangen/**/*.py') }}
+          key: >-
+            nuitka-${{ runner.os }}-py3.11-
+            ${{ hashFiles('pyproject.toml') }}-
+            ${{ hashFiles('bangen/**/*.py', '_entry.py') }}
           restore-keys: |
-            nuitka-${{ runner.os }}-3.11-
+            nuitka-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}-
+            nuitka-${{ runner.os }}-py3.11-
 
-      - name: Install dependencies
+      # ─────────────────────────────────────────────────────────────────────
+
+      - name: Generate entry script
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install . "nuitka[onefile]"
-
-      # Ensure Nuitka uses cache path
-      - name: Set Nuitka cache dir
-        run: echo "NUITKA_CACHE_DIR=$HOME/.cache/Nuitka" >> $GITHUB_ENV
+          cat > _entry.py << 'EOF'
+          from bangen.app import main
+          if __name__ == "__main__":
+              main()
+          EOF
 
       - name: Build (Nuitka onefile optimized)
         shell: bash
@@ -89,14 +170,34 @@ jobs:
             --output-dir=build \
             --output-filename=bangen \
             --follow-imports \
+            \
+            --include-package=bangen \
+            \
+            --include-package=rich \
+            --include-package-data=rich \
+            \
+            --include-package=pyfiglet \
+            --include-package-data=pyfiglet \
+            \
+            --include-package=PIL \
+            \
+            --include-package=typer \
+            --include-package=click \
+            \
+            --nofollow-import-to=tkinter \
+            --nofollow-import-to=unittest \
+            --nofollow-import-to=test \
+            --nofollow-import-to=distutils \
+            --nofollow-import-to=setuptools \
+            --nofollow-import-to=pkg_resources \
+            \
             --lto=yes \
-            --jobs=2 \
             --python-flag=no_asserts \
             --python-flag=no_docstrings \
             --python-flag=isolated \
             --onefile-tempdir-spec="{CACHE_DIR}/bangen/${{ needs.metadata.outputs.version }}" \
-            --clang \
-            bangen/__main__.py
+            ${{ matrix.extra_build_flags }} \
+            _entry.py
 
       - name: Prepare release asset
         shell: bash
@@ -105,13 +206,15 @@ jobs:
 
           if [ "${{ runner.os }}" = "Windows" ]; then
             BIN="build/bangen.exe"
+            EXT=".exe"
           else
             BIN="build/bangen"
+            EXT=""
             chmod +x "$BIN"
           fi
 
           cp "$BIN" \
-            "release-assets/bangen-${{ needs.metadata.outputs.tag }}-${{ matrix.platform }}"
+            "release-assets/bangen-${{ needs.metadata.outputs.tag }}-${{ matrix.platform }}${EXT}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
