@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -18,9 +18,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract version
-        id: vars
+      - name: Extract version (Unix)
+        id: vars_unix
+        if: runner.os != 'Windows'
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Extract version (Windows)
+        id: vars_win
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Resolve version
+        id: vars
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "VERSION=${{ steps.vars_win.outputs.VERSION }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${{ steps.vars_unix.outputs.VERSION }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -38,10 +57,16 @@ jobs:
         run: |
           xcode-select -p || xcode-select --install || true
 
+      - name: Install MSVC build tools (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Cache Nuitka
         uses: actions/cache@v4
         with:
-          path: ~/.cache/Nuitka
+          path: |
+            ~/.cache/Nuitka
+            ~\AppData\Local\Nuitka\Nuitka\Cache
           key: nuitka-${{ runner.os }}-${{ hashFiles('**/*.py') }}
 
       - name: Install Python dependencies
@@ -49,7 +74,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install nuitka
 
-      - name: Build with Nuitka
+      - name: Build with Nuitka (Unix)
+        if: runner.os != 'Windows'
         run: |
           python -m nuitka \
             --mode=onefile \
@@ -77,7 +103,37 @@ jobs:
             --static-libpython=yes \
             _entry.py
 
-      - name: Prepare artifacts
+      - name: Build with Nuitka (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m nuitka `
+            --mode=onefile `
+            --assume-yes-for-downloads `
+            --output-dir=build `
+            --output-filename=bangen `
+            --include-package=bangen `
+            --include-package=rich `
+            --include-package-data=rich `
+            --include-package=pyfiglet `
+            --include-package-data=pyfiglet `
+            --include-package=PIL `
+            --include-package=typer `
+            --include-package=click `
+            --nofollow-import-to=tkinter `
+            --nofollow-import-to=unittest `
+            --nofollow-import-to=test `
+            --nofollow-import-to=distutils `
+            --nofollow-import-to=setuptools `
+            --nofollow-import-to=pkg_resources `
+            --python-flag=no_asserts `
+            --python-flag=no_docstrings `
+            --python-flag=isolated `
+            "--onefile-tempdir-spec={CACHE_DIR}/bangen/${{ steps.vars.outputs.VERSION }}" `
+            _entry.py
+
+      - name: Prepare artifacts (Unix)
+        if: runner.os != 'Windows'
         run: |
           mkdir -p dist
           if [[ "$RUNNER_OS" == "Linux" ]]; then
@@ -85,6 +141,13 @@ jobs:
           else
             mv build/bangen dist/bangen-${{ steps.vars.outputs.VERSION }}-macos
           fi
+
+      - name: Prepare artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Move-Item build\bangen.exe dist\bangen-${{ steps.vars.outputs.VERSION }}-windows.exe
 
       - name: Strip binary (Linux only)
         if: runner.os == 'Linux'
