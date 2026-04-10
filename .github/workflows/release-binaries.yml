@@ -82,7 +82,7 @@ jobs:
       - name: Install Python deps
         run: |
           python -m pip install -U pip wheel setuptools
-          pip install nuitka
+          pip install Nuitka[onefile]
           pip install .
 
       - name: Create entrypoint
