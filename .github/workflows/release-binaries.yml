@@ -2,6 +2,8 @@ name: Build Bangen (Nuitka)
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -10,7 +12,45 @@ permissions:
   contents: write
 
 jobs:
+  # --- Tagging Job ---
+  # Ensures a version tag exists based on pyproject.toml if triggered from a branch
+  tag:
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(python - <<EOF
+          import tomllib, pathlib
+          data = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          print(data["project"]["version"])
+          EOF
+          )
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create tag if missing
+        run: |
+          TAG_NAME="v${{ steps.version.outputs.VERSION }}"
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists."
+          else
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            git tag "$TAG_NAME"
+            git push origin "$TAG_NAME"
+          fi
+
+  # --- Build Job ---
+  # Compiles the application into a single executable for Linux, macOS, and Windows
   build:
+    needs: tag
     strategy:
       fail-fast: false
       matrix:
@@ -21,38 +61,46 @@ jobs:
             name: macos
           - os: windows-latest
             name: windows
-
     runs-on: ${{ matrix.os }}
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build fingerprint + cache key
+      - name: Extract Metadata & Validate
         id: meta
         shell: bash
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          PYPROJECT_VERSION=$(python - <<EOF
+          import tomllib, pathlib
+          data = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          print(data["project"]["version"])
+          EOF
+          )
+
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF_NAME#v}
+          else
+            VERSION=$PYPROJECT_VERSION
+          fi
+
           SHA=$(git rev-parse --short HEAD)
-
-          # sha256sum on Linux, shasum on macOS — both unavailable on Windows
-          # so we use Python for a cross-platform hash
-          DEPS_HASH=$(python -c "
+          DEPS_HASH=$(python - <<EOF
           import hashlib, pathlib
-          p = pathlib.Path('pyproject.toml')
-          print(hashlib.sha256(p.read_bytes()).hexdigest()[:16] if p.exists() else 'nodeps')
-          ")
+          p = pathlib.Path("pyproject.toml")
+          print(hashlib.sha256(p.read_bytes()).hexdigest()[:16])
+          EOF
+          )
 
-          echo "VERSION=$VERSION"           >> $GITHUB_OUTPUT
-          echo "SHA=$SHA"                   >> $GITHUB_OUTPUT
-          echo "DEPS=$DEPS_HASH"            >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "SHA=$SHA" >> $GITHUB_OUTPUT
           echo "CACHE_KEY=${{ runner.os }}-$VERSION-$DEPS_HASH" >> $GITHUB_OUTPUT
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Cross-workflow cache (Nuitka + deps)
+      - name: Cache Nuitka
         uses: actions/cache@v4
         with:
           path: |
@@ -62,34 +110,28 @@ jobs:
             ~\AppData\Local\Nuitka\Nuitka\Cache
           key: nuitka-${{ steps.meta.outputs.CACHE_KEY }}
           restore-keys: |
-            nuitka-${{ runner.os }}-${{ steps.meta.outputs.VERSION }}-
             nuitka-${{ runner.os }}-
 
-      - name: Install system deps (Linux)
+      - name: Install System Dependencies (Linux)
         if: runner.os == 'Linux'
-        # build-essential already pulls in binutils (which provides strip).
-        # Do NOT list "strip" — it is not a package name and will abort apt.
         run: sudo apt-get update && sudo apt-get install -y build-essential patchelf
 
-      - name: Install system deps (macOS)
+      - name: Install System Dependencies (macOS)
         if: runner.os == 'macOS'
         run: xcode-select -p || xcode-select --install || true
 
-      - name: MSVC setup (Windows)
+      - name: MSVC Setup (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Install Python deps
+      - name: Install Python Dependencies
         run: |
           python -m pip install -U pip wheel
-          # setuptools>=72 removed pkg_resources.DefaultProvider, which
-          # Nuitka 4.x's bundled Jinja2 copy requires during C code generation.
-          # Pin below 72 until Nuitka ships its own Jinja2 fix.
           pip install "setuptools<72"
           pip install nuitka[onefile]
           pip install .
 
-      - name: Create entrypoint
+      - name: Create Entrypoint Script
         shell: bash
         run: |
           cat > _entry.py << 'EOF'
@@ -103,95 +145,52 @@ jobs:
         run: |
           python -m nuitka \
             --onefile \
-            --lto=yes \
-            --jobs=2 \
+            --jobs=auto \
             --assume-yes-for-downloads \
             --output-dir=build \
             --output-filename=bangen \
-            --include-package=bangen \
-            --include-package=rich \
-            --include-package=pyfiglet \
-            --include-package=PIL \
-            --include-package=typer \
-            --include-package=click \
             --nofollow-import-to=tkinter \
             --nofollow-import-to=unittest \
             --nofollow-import-to=test \
-            --nofollow-import-to=distutils \
-            --nofollow-import-to=setuptools \
-            --nofollow-import-to=pkg_resources \
             --python-flag=no_asserts \
             --python-flag=no_docstrings \
             --python-flag=isolated \
-            "--onefile-tempdir-spec={CACHE_DIR}/bangen/${{ steps.meta.outputs.VERSION }}" \
+            --onefile-tempdir-spec="{TEMP}/bangen" \
+            --plugin-enable=anti-bloat \
             _entry.py
 
-      - name: Stage fingerprinted artifact
+      - name: Stage Artifact
         shell: bash
         run: |
           mkdir -p dist
           NAME="bangen-${{ matrix.name }}-${{ steps.meta.outputs.VERSION }}-${{ steps.meta.outputs.SHA }}"
-
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            mv build/bangen dist/$NAME
-            # strip is provided by binutils (part of build-essential)
-            strip dist/$NAME
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            mv build/bangen dist/$NAME
-            # strip ships with Xcode Command Line Tools
-            strip dist/$NAME
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            mv build/bangen.exe "dist/$NAME.exe"
           else
-            # Nuitka always appends .exe on Windows regardless of --output-filename
-            mv build/bangen.exe dist/$NAME.exe
+            mv build/bangen "dist/$NAME"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}-build
           path: dist/*
 
+  # --- Release Job ---
+  # Consolidates all builds and creates a draft GitHub Release
   release:
-    needs: build
+    needs: [tag, build]
     runs-on: ubuntu-latest
-
     steps:
-      # Checkout is required so git log/describe have history to work with
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # full history so git describe can find previous tags
-
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: true   # flatten into artifacts/ instead of artifacts/<name>/
+          merge-multiple: true
 
-      - name: Generate changelog
-        id: changelog
-        shell: bash
-        run: |
-          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          {
-            echo "CHANGELOG<<EOF"
-            if [[ -n "$PREV" ]]; then
-              git log "$PREV"..HEAD --pretty=format:"- %s"
-            else
-              git log --pretty=format:"- %s"
-            fi
-            echo ""
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
-      - name: Create DRAFT release
+      - name: Create Draft Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Bangen ${{ github.ref_name }}
-          body: |
-            ## 🚀 Changes
-            ${{ steps.changelog.outputs.CHANGELOG }}
-
-            ## 🧬 Build Info
-            - Commit: `${{ github.sha }}`
-            - Matrix build: Linux · macOS · Windows
-            - Nuitka LTO + onefile
+          tag_name: v${{ needs.tag.outputs.version }}
+          name: Bangen v${{ needs.tag.outputs.version }}
+          draft: true
           files: artifacts/*
