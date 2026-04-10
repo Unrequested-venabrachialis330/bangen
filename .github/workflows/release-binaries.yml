@@ -58,8 +58,8 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      # 🔥 CACHE 1: Nuitka + compiler cache
-      - name: Cache Nuitka
+      # 🔥 Cache Nuitka + compiler artifacts
+      - name: Cache Nuitka + ccache
         uses: actions/cache@v4
         with:
           path: |
@@ -67,20 +67,20 @@ jobs:
             ~/.ccache
             ~/AppData/Local/Nuitka
             ~/AppData/Local/ccache
-          key: nuitka-${{ runner.os }}-3.11-${{ hashFiles('pyproject.toml') }}
+          key: nuitka-${{ runner.os }}-3.11-${{ hashFiles('pyproject.toml', 'bangen/**/*.py') }}
           restore-keys: |
             nuitka-${{ runner.os }}-3.11-
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install . nuitka
 
-      # 🔥 FORCE cache location (important)
+      # Ensure Nuitka uses cached directory
       - name: Set Nuitka cache dir
         run: echo "NUITKA_CACHE_DIR=$HOME/.cache/Nuitka" >> $GITHUB_ENV
 
-      - name: Build (Nuitka GOD MODE + cache)
+      - name: Build (Nuitka onefile optimized)
         shell: bash
         run: |
           python -m nuitka \
@@ -96,26 +96,31 @@ jobs:
             --python-flag=isolated \
             --onefile-tempdir-spec="{CACHE_DIR}/bangen/${{ needs.metadata.outputs.version }}" \
             --clang \
-            --optimize=3 \
             bangen/__main__.py
 
-      - name: Prepare asset
+      - name: Prepare release asset
+        shell: bash
         run: |
           mkdir -p release-assets
+
           if [ "${{ runner.os }}" = "Windows" ]; then
             BIN="build/bangen.exe"
           else
             BIN="build/bangen"
             chmod +x "$BIN"
           fi
-          cp "$BIN" "release-assets/bangen-${{ needs.metadata.outputs.tag }}-${{ matrix.platform }}"
 
-      - uses: actions/upload-artifact@v4
+          cp "$BIN" \
+            "release-assets/bangen-${{ needs.metadata.outputs.tag }}-${{ matrix.platform }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
           name: bangen-${{ needs.metadata.outputs.tag }}-${{ matrix.platform }}
           path: release-assets/*
 
-      - uses: softprops/action-gh-release@v2
+      - name: Upload to GitHub release
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.metadata.outputs.tag }}
           files: release-assets/*
