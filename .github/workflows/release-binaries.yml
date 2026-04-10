@@ -1,4 +1,4 @@
-name: Release Binaries
+name: Build Bangen (Nuitka)
 
 on:
   push:
@@ -6,227 +6,106 @@ on:
       - "v*"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  metadata:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.meta.outputs.version }}
-      tag: ${{ steps.meta.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Read version
-        id: meta
-        run: |
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import tomllib, pathlib
-          v = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
-          print(f"version={v}")
-          print(f"tag=v{v}")
-          PY
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.tag }}
-          draft: false
-          prerelease: false
-
   build:
-    needs: metadata
-    runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
+        os: [ubuntu-latest, macos-latest]
 
-          - os: macos-latest
-            platform: macos-universal2
-
-          - os: windows-latest
-            platform: windows-x86_64
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # ── Layer 1: installed Python environment ────────────────────────────
-      - name: Cache pip environment
-        id: pip-cache
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Ensure Xcode CLI tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          xcode-select -p || xcode-select --install || true
+
+      - name: Cache Nuitka
         uses: actions/cache@v4
         with:
-          path: ${{ env.pythonLocation }}
-          key: pip-env-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}
+          path: ~/.cache/Nuitka
+          key: nuitka-${{ runner.os }}-${{ hashFiles('**/*.py') }}
 
-      - name: Install dependencies
-        if: steps.pip-cache.outputs.cache-hit != 'true'
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e . "nuitka[onefile]"
+          pip install nuitka
 
-      # ── Layer 2: sccache (C compiler object file cache) ──────────────────
-      # Intercepts clang calls on Linux/macOS via a shim in /usr/local/bin.
-      # Windows MSVC (cl.exe) is called through Nuitka's Scons backend in a
-      # way that cannot be shimmed — Layer 3 handles Windows compilation cost.
-      - uses: mozilla-actions/sccache-action@v0.0.5
-
-      - name: Install clang (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y clang
-
-      - name: Configure sccache + compiler shim
-        shell: bash
-        run: |
-          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
-          echo "SCCACHE_CACHE_SIZE=2G"    >> "$GITHUB_ENV"
-
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            REAL_CLANG="$(which clang)"
-            REAL_CLANGXX="$(which clang++)"
-            printf '#!/bin/sh\nexec sccache %s "$@"\n' "$REAL_CLANG"   | sudo tee /usr/local/bin/clang   > /dev/null
-            printf '#!/bin/sh\nexec sccache %s "$@"\n' "$REAL_CLANGXX" | sudo tee /usr/local/bin/clang++ > /dev/null
-            sudo chmod +x /usr/local/bin/clang /usr/local/bin/clang++
-
-          elif [ "${{ runner.os }}" = "macOS" ]; then
-            REAL_CLANG="$(xcrun -f clang)"
-            REAL_CLANGXX="$(xcrun -f clang++)"
-            printf '#!/bin/sh\nexec sccache %s "$@"\n' "$REAL_CLANG"   | sudo tee /usr/local/bin/clang   > /dev/null
-            printf '#!/bin/sh\nexec sccache %s "$@"\n' "$REAL_CLANGXX" | sudo tee /usr/local/bin/clang++ > /dev/null
-            sudo chmod +x /usr/local/bin/clang /usr/local/bin/clang++
-          fi
-
-      # ── Layer 3: Nuitka bytecode + download cache ─────────────────────────
-      - name: Set Nuitka cache dir
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            echo "NUITKA_CACHE_DIR=${LOCALAPPDATA}/Nuitka" >> "$GITHUB_ENV"
-          else
-            echo "NUITKA_CACHE_DIR=${HOME}/.cache/Nuitka"  >> "$GITHUB_ENV"
-          fi
-
-      - name: Cache Nuitka artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/Nuitka
-            ~/AppData/Local/Nuitka
-          key: >-
-            nuitka-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('bangen/**/*.py') }}
-          restore-keys: |
-            nuitka-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}-
-            nuitka-${{ runner.os }}-py3.11-
-
-      # ─────────────────────────────────────────────────────────────────────
-
-      - name: Generate entry script
-        shell: bash
-        run: |
-          cat > _entry.py << 'EOF'
-          from bangen.app import main
-          if __name__ == "__main__":
-              main()
-          EOF
-
-      # Shared Nuitka flags, extracted to an env var to avoid duplication
-      # across the two macOS arch passes and the single Linux/Windows pass.
-      - name: Set common Nuitka flags
-        shell: bash
-        run: |
-          cat >> "$GITHUB_ENV" << 'EOF'
-          NUITKA_COMMON_FLAGS=--mode=onefile --assume-yes-for-downloads --output-dir=build --follow-imports --include-package=bangen --include-package=rich --include-package-data=rich --include-package=pyfiglet --include-package-data=pyfiglet --include-package=PIL --include-package=typer --include-package=click --nofollow-import-to=tkinter --nofollow-import-to=unittest --nofollow-import-to=test --nofollow-import-to=distutils --nofollow-import-to=setuptools --nofollow-import-to=pkg_resources --lto=yes --python-flag=no_asserts --python-flag=no_docstrings --python-flag=isolated --onefile-tempdir-spec={CACHE_DIR}/bangen/${{ needs.metadata.outputs.version }}
-          EOF
-
-      # ── macOS: two separate arch passes + lipo fat binary ─────────────────
-      # Nuitka onefile cannot produce a universal2 binary in a single pass
-      # (fatal error). Build arm64 and x86_64 separately, then lipo-merge.
-      - name: Build arm64 (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
+      - name: Build with Nuitka
         run: |
           python -m nuitka \
-            $NUITKA_COMMON_FLAGS \
-            --output-filename=bangen-arm64 \
-            --clang \
-            --macos-target-arch=arm64 \
-            _entry.py
-
-      - name: Build x86_64 (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          python -m nuitka \
-            $NUITKA_COMMON_FLAGS \
-            --output-filename=bangen-x86_64 \
-            --clang \
-            --macos-target-arch=x86_64 \
-            _entry.py
-
-      - name: Lipo merge → universal2 (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          lipo -create \
-            -output build/bangen \
-            build/bangen-arm64 \
-            build/bangen-x86_64
-
-      # ── Linux / Windows: single pass ──────────────────────────────────────
-      - name: Build (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          python -m nuitka \
-            $NUITKA_COMMON_FLAGS \
+            --mode=onefile \
+            --assume-yes-for-downloads \
+            --output-dir=build \
             --output-filename=bangen \
-            --clang \
+            --include-package=bangen \
+            --include-package=rich \
+            --include-package-data=rich \
+            --include-package=pyfiglet \
+            --include-package-data=pyfiglet \
+            --include-package=PIL \
+            --include-package=typer \
+            --include-package=click \
+            --nofollow-import-to=tkinter \
+            --nofollow-import-to=unittest \
+            --nofollow-import-to=test \
+            --nofollow-import-to=distutils \
+            --nofollow-import-to=setuptools \
+            --nofollow-import-to=pkg_resources \
+            --python-flag=no_asserts \
+            --python-flag=no_docstrings \
+            --python-flag=isolated \
+            --onefile-tempdir-spec={CACHE_DIR}/bangen/2.2.1 \
+            --static-libpython=yes \
             _entry.py
 
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
+      - name: Prepare artifacts
         run: |
-          python -m nuitka \
-            $NUITKA_COMMON_FLAGS \
-            --output-filename=bangen \
-            _entry.py
-
-      # ─────────────────────────────────────────────────────────────────────
-
-      - name: Prepare release asset
-        shell: bash
-        run: |
-          mkdir -p release-assets
-
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            BIN="build/bangen.exe"
-            EXT=".exe"
+          mkdir -p dist
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            mv build/bangen dist/bangen-linux
           else
-            BIN="build/bangen"
-            EXT=""
-            chmod +x "$BIN"
+            mv build/bangen dist/bangen-macos
           fi
 
-          cp "$BIN" \
-            "release-assets/bangen-${{ needs.metadata.outputs.tag }}-${{ matrix.platform }}${EXT}"
+      - name: Strip binary (Linux only)
+        if: runner.os == 'Linux'
+        run: strip dist/bangen-linux
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bangen-${{ needs.metadata.outputs.tag }}-${{ matrix.platform }}
-          path: release-assets/*
+          name: bangen-${{ runner.os }}
+          path: dist/*
 
-      - name: Upload to GitHub release
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.metadata.outputs.tag }}
-          files: release-assets/*
+          files: artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
