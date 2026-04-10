@@ -59,7 +59,7 @@ jobs:
           cache: "pip"
 
       # 🔥 Cache Nuitka + compiler artifacts
-      - name: Cache Nuitka + ccache
+      - name: Cache Nuitka + compiler
         uses: actions/cache@v4
         with:
           path: |
@@ -74,9 +74,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install . nuitka
+          pip install . "nuitka[onefile]"
 
-      # Ensure Nuitka uses cached directory
+      # Ensure Nuitka uses cache path
       - name: Set Nuitka cache dir
         run: echo "NUITKA_CACHE_DIR=$HOME/.cache/Nuitka" >> $GITHUB_ENV
 
