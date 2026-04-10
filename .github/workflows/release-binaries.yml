@@ -53,7 +53,7 @@ jobs:
       - name: Install Python deps
         shell: bash
         run: |
-          python -m pip install -U pip wheel nuitka
+          python -m pip install -U pip wheel nuitka zstandard
           [[ -f requirements.txt ]] && pip install -r requirements.txt || true
 
       - name: Write entrypoint
@@ -64,15 +64,11 @@ jobs:
       - name: Build with Nuitka
         shell: bash
         run: |
-          JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
           python -m nuitka \
-            --onefile \
-            --lto=thin \
-            --jobs="$JOBS" \
+            --mode=onefile \
             --assume-yes-for-downloads \
             --output-dir=build \
             --output-filename=bangen \
-            --follow-imports \
             --nofollow-import-to=tkinter,unittest,test,distutils,setuptools,pkg_resources \
             --python-flag=no_asserts,no_docstrings,isolated \
             --onefile-tempdir-spec="{CACHE_DIR}/bangen/${{ github.ref_name }}" \
@@ -101,7 +97,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # required for action-gh-release to create releases
+      contents: write
 
     steps:
       - uses: actions/download-artifact@v4
