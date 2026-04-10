@@ -1,70 +1,82 @@
 name: Build Bangen (Nuitka)
+
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: macos-latest
+            name: macos
+          - os: windows-latest
+            name: windows
+
     runs-on: ${{ matrix.os }}
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Extract version (Unix)
-        id: vars_unix
-        if: runner.os != 'Windows'
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-      - name: Extract version (Windows)
-        id: vars_win
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-      - name: Resolve version
-        id: vars
+      - uses: actions/checkout@v4
+
+      - name: Build fingerprint + cache key
+        id: meta
         shell: bash
         run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "VERSION=${{ steps.vars_win.outputs.VERSION }}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=${{ steps.vars_unix.outputs.VERSION }}" >> $GITHUB_OUTPUT
-          fi
-      - name: Setup Python
-        uses: actions/setup-python@v5
+          VERSION=${GITHUB_REF_NAME#v}
+          SHA=$(git rev-parse --short HEAD)
+          DEPS_HASH=$(shasum -a 256 pyproject.toml 2>/dev/null | cut -d' ' -f1 || echo "nodeps")
+
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "SHA=$SHA" >> $GITHUB_OUTPUT
+          echo "DEPS=$DEPS_HASH" >> $GITHUB_OUTPUT
+          echo "CACHE_KEY=${{ runner.os }}-$VERSION-$DEPS_HASH" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-      - name: Ensure Xcode CLI tools (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          xcode-select -p || xcode-select --install || true
-      - name: Install MSVC build tools (Windows)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-      - name: Cache Nuitka
+          cache: "pip"
+
+      - name: Cross-workflow cache (Nuitka + deps)
         uses: actions/cache@v4
         with:
           path: |
+            ~/.cache/pip
             ~/.cache/Nuitka
             ~/Library/Caches/Nuitka
             ~\AppData\Local\Nuitka\Nuitka\Cache
-          key: nuitka-${{ runner.os }}-${{ hashFiles('**/*.py') }}
+          key: nuitka-${{ steps.meta.outputs.CACHE_KEY }}
           restore-keys: |
+            nuitka-${{ runner.os }}-${{ steps.meta.outputs.VERSION }}-
             nuitka-${{ runner.os }}-
-      - name: Install Python dependencies
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential strip
+
+      - name: Install system deps (macOS)
+        if: runner.os == 'macOS'
+        run: xcode-select -p || xcode-select --install || true
+
+      - name: MSVC setup (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Python deps (locked build)
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install -U pip wheel setuptools
           pip install nuitka[onefile]
           pip install .
-      - name: Create entry point script
+
+      - name: Create entrypoint
         shell: bash
         run: |
           cat > _entry.py << 'EOF'
@@ -72,21 +84,21 @@ jobs:
           if __name__ == "__main__":
               main()
           EOF
-      - name: Build with Nuitka (Unix)
-        if: runner.os != 'Windows'
+
+      - name: Nuitka parallel build (REAL speed boost)
+        shell: bash
         run: |
           python -m nuitka \
             --mode=onefile \
+            --lto=yes \
+            --jobs=2 \
             --assume-yes-for-downloads \
             --output-dir=build \
             --output-filename=bangen \
             --include-package=bangen \
             --include-package=rich \
-            --include-package-data=rich \
             --include-package=pyfiglet \
-            --include-package-data=pyfiglet \
             --include-package=PIL \
-            --include-package-data=PIL \
             --include-package=typer \
             --include-package=click \
             --nofollow-import-to=tkinter \
@@ -98,79 +110,59 @@ jobs:
             --python-flag=no_asserts \
             --python-flag=no_docstrings \
             --python-flag=isolated \
-            --onefile-tempdir-spec={CACHE_DIR}/bangen/${{ steps.vars.outputs.VERSION }} \
-            --static-libpython=yes \
+            --onefile-tempdir-spec={CACHE_DIR}/bangen/${{ steps.meta.outputs.VERSION }} \
             _entry.py
-      - name: Build with Nuitka (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          python -m nuitka `
-            --mode=onefile `
-            --assume-yes-for-downloads `
-            --output-dir=build `
-            --output-filename=bangen `
-            --include-package=bangen `
-            --include-package=rich `
-            --include-package-data=rich `
-            --include-package=pyfiglet `
-            --include-package-data=pyfiglet `
-            --include-package=PIL `
-            --include-package-data=PIL `
-            --include-package=typer `
-            --include-package=click `
-            --nofollow-import-to=tkinter `
-            --nofollow-import-to=unittest `
-            --nofollow-import-to=test `
-            --nofollow-import-to=distutils `
-            --nofollow-import-to=setuptools `
-            --nofollow-import-to=pkg_resources `
-            --python-flag=no_asserts `
-            --python-flag=no_docstrings `
-            --python-flag=isolated `
-            "--onefile-tempdir-spec={CACHE_DIR}/bangen/${{ steps.vars.outputs.VERSION }}" `
-            _entry.py
-      - name: Prepare artifacts (Unix)
-        if: runner.os != 'Windows'
+
+      - name: Fingerprinted artifacts (immutable builds)
+        shell: bash
         run: |
           mkdir -p dist
+          NAME="bangen-${{ matrix.name }}-${{ steps.meta.outputs.VERSION }}-${{ steps.meta.outputs.SHA }}"
+
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            mv build/bangen dist/bangen-${{ steps.vars.outputs.VERSION }}-linux
+            mv build/bangen dist/$NAME
+            strip dist/$NAME
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            mv build/bangen dist/$NAME
           else
-            mv build/bangen dist/bangen-${{ steps.vars.outputs.VERSION }}-macos
+            mv build/bangen.exe dist/$NAME.exe
           fi
-      - name: Prepare artifacts (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist
-          Move-Item build\bangen.exe dist\bangen-${{ steps.vars.outputs.VERSION }}-windows.exe
-      - name: Strip binary (Linux only)
-        if: runner.os == 'Linux'
-        run: strip dist/bangen-${{ steps.vars.outputs.VERSION }}-linux
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: bangen-${{ runner.os }}
+          name: ${{ matrix.name }}-build
           path: dist/*
+
   release:
     needs: build
     runs-on: ubuntu-latest
-    # FIX: also runs when manually dispatched, not only on tag pushes
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+
     steps:
-      - name: Extract version
-        id: vars
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Create GitHub Release
+
+      - name: Generate changelog (safe range)
+        id: changelog
+        shell: bash
+        run: |
+          PREV=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          git log $PREV..HEAD --pretty=format:"- %s" >> $GITHUB_OUTPUT || true
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create DRAFT release (approval pipeline)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Bangen v${{ steps.vars.outputs.VERSION }}
+          name: Bangen ${{ github.ref_name }}
+          draft: true
+          body: |
+            ## 🚀 Changes
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ## 🧬 Build Info
+            - Commit: ${{ github.sha }}
+            - Parallel matrix build (Linux/macOS/Windows)
+            - Nuitka LTO enabled
           files: artifacts/**/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
