@@ -45,15 +45,12 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux-x86_64
-            extra_build_flags: --clang
 
           - os: macos-latest
             platform: macos-universal2
-            extra_build_flags: --clang --macos-target-arch=universal
 
           - os: windows-latest
             platform: windows-x86_64
-            extra_build_flags: ""
 
     steps:
       - uses: actions/checkout@v4
@@ -61,47 +58,36 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          # No cache: pip — we cache the entire installed env in Layer 1,
-          # which is strictly better (zero pip activity on a cache hit).
 
       # ── Layer 1: installed Python environment ────────────────────────────
-      # Caches the full Python + site-packages directory. On a hit, pip is
-      # never invoked at all. Keyed on pyproject.toml only — bangen itself
-      # is installed with -e (editable) so source changes are always live
-      # without busting this cache.
       - name: Cache pip environment
         id: pip-cache
         uses: actions/cache@v4
         with:
           path: ${{ env.pythonLocation }}
           key: pip-env-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}
-          # Intentionally no restore-keys: a partial env restore causes subtle
-          # import errors that are harder to debug than a clean install.
 
       - name: Install dependencies
         if: steps.pip-cache.outputs.cache-hit != 'true'
         run: |
           python -m pip install --upgrade pip
-          pip install -e . nuitka
+          pip install -e . "nuitka[onefile]"
 
-      # ── Layer 2: sccache (C compiler output cache) ───────────────────────
-      # Nuitka translates Python → C, then compiles the C with clang/MSVC.
-      # sccache caches the compiled C object files keyed on content hash,
-      # so unchanged modules are never recompiled.
-      #
-      # Linux / macOS: we shim the clang binary so every compiler call Nuitka
-      # makes goes through sccache transparently. The shim must land before
-      # /usr/bin in PATH — /usr/local/bin satisfies this on both runners.
-      #
-      # Windows: Nuitka calls cl.exe (MSVC) through its own Scons backend in
-      # a way that cannot be intercepted with a shim. Layer 3 carries Windows.
+      # ── Layer 2: sccache (C compiler object file cache) ──────────────────
+      # Intercepts clang calls on Linux/macOS via a shim in /usr/local/bin.
+      # Windows MSVC (cl.exe) is called through Nuitka's Scons backend in a
+      # way that cannot be shimmed — Layer 3 handles Windows compilation cost.
       - uses: mozilla-actions/sccache-action@v0.0.5
 
-      - name: Configure sccache
+      - name: Install clang (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y clang
+
+      - name: Configure sccache + compiler shim
         shell: bash
         run: |
-          echo "SCCACHE_GHA_ENABLED=true"  >> "$GITHUB_ENV"
-          echo "SCCACHE_CACHE_SIZE=2G"     >> "$GITHUB_ENV"
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+          echo "SCCACHE_CACHE_SIZE=2G"    >> "$GITHUB_ENV"
 
           if [ "${{ runner.os }}" = "Linux" ]; then
             REAL_CLANG="$(which clang)"
@@ -119,14 +105,6 @@ jobs:
           fi
 
       # ── Layer 3: Nuitka bytecode + download cache ─────────────────────────
-      # Caches two things inside Nuitka's cache dir:
-      #   • Python→C translation results  (expensive, source-sensitive)
-      #   • Onefile bootstrap downloads   (AppImage on Linux, etc. — one-time)
-      #
-      # Three-tier restore-key cascade:
-      #   1. Exact hit  — source + deps unchanged, fully warm
-      #   2. Deps hit   — only deps unchanged; translation cache partially warm
-      #   3. OS hit     — bootstrap downloads reused; compilation starts cold
       - name: Set Nuitka cache dir
         shell: bash
         run: |
@@ -143,9 +121,7 @@ jobs:
             ~/.cache/Nuitka
             ~/AppData/Local/Nuitka
           key: >-
-            nuitka-${{ runner.os }}-py3.11-
-            ${{ hashFiles('pyproject.toml') }}-
-            ${{ hashFiles('bangen/**/*.py', '_entry.py') }}
+            nuitka-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('bangen/**/*.py') }}
           restore-keys: |
             nuitka-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}-
             nuitka-${{ runner.os }}-py3.11-
@@ -161,43 +137,70 @@ jobs:
               main()
           EOF
 
-      - name: Build (Nuitka onefile optimized)
+      # Shared Nuitka flags, extracted to an env var to avoid duplication
+      # across the two macOS arch passes and the single Linux/Windows pass.
+      - name: Set common Nuitka flags
+        shell: bash
+        run: |
+          cat >> "$GITHUB_ENV" << 'EOF'
+          NUITKA_COMMON_FLAGS=--mode=onefile --assume-yes-for-downloads --output-dir=build --follow-imports --include-package=bangen --include-package=rich --include-package-data=rich --include-package=pyfiglet --include-package-data=pyfiglet --include-package=PIL --include-package=typer --include-package=click --nofollow-import-to=tkinter --nofollow-import-to=unittest --nofollow-import-to=test --nofollow-import-to=distutils --nofollow-import-to=setuptools --nofollow-import-to=pkg_resources --lto=yes --python-flag=no_asserts --python-flag=no_docstrings --python-flag=isolated --onefile-tempdir-spec={CACHE_DIR}/bangen/${{ needs.metadata.outputs.version }}
+          EOF
+
+      # ── macOS: two separate arch passes + lipo fat binary ─────────────────
+      # Nuitka onefile cannot produce a universal2 binary in a single pass
+      # (fatal error). Build arm64 and x86_64 separately, then lipo-merge.
+      - name: Build arm64 (macOS)
+        if: runner.os == 'macOS'
         shell: bash
         run: |
           python -m nuitka \
-            --mode=onefile \
-            --assume-yes-for-downloads \
-            --output-dir=build \
-            --output-filename=bangen \
-            --follow-imports \
-            \
-            --include-package=bangen \
-            \
-            --include-package=rich \
-            --include-package-data=rich \
-            \
-            --include-package=pyfiglet \
-            --include-package-data=pyfiglet \
-            \
-            --include-package=PIL \
-            \
-            --include-package=typer \
-            --include-package=click \
-            \
-            --nofollow-import-to=tkinter \
-            --nofollow-import-to=unittest \
-            --nofollow-import-to=test \
-            --nofollow-import-to=distutils \
-            --nofollow-import-to=setuptools \
-            --nofollow-import-to=pkg_resources \
-            \
-            --lto=yes \
-            --python-flag=no_asserts \
-            --python-flag=no_docstrings \
-            --python-flag=isolated \
-            --onefile-tempdir-spec="{CACHE_DIR}/bangen/${{ needs.metadata.outputs.version }}" \
-            ${{ matrix.extra_build_flags }} \
+            $NUITKA_COMMON_FLAGS \
+            --output-filename=bangen-arm64 \
+            --clang \
+            --macos-target-arch=arm64 \
             _entry.py
+
+      - name: Build x86_64 (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python -m nuitka \
+            $NUITKA_COMMON_FLAGS \
+            --output-filename=bangen-x86_64 \
+            --clang \
+            --macos-target-arch=x86_64 \
+            _entry.py
+
+      - name: Lipo merge → universal2 (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          lipo -create \
+            -output build/bangen \
+            build/bangen-arm64 \
+            build/bangen-x86_64
+
+      # ── Linux / Windows: single pass ──────────────────────────────────────
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          python -m nuitka \
+            $NUITKA_COMMON_FLAGS \
+            --output-filename=bangen \
+            --clang \
+            _entry.py
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -m nuitka \
+            $NUITKA_COMMON_FLAGS \
+            --output-filename=bangen \
+            _entry.py
+
+      # ─────────────────────────────────────────────────────────────────────
 
       - name: Prepare release asset
         shell: bash
