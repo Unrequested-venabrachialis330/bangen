@@ -186,7 +186,7 @@ GitHub Actions builds standalone binaries for `Windows`, `macOS`, and `Linux` an
 
 - asset names follow the project version from `pyproject.toml`
 - release files include the platform in the filename
-- the release workflow expects a tag matching the project version, for example `v2.2.1`
+- the release workflow expects a tag matching the project version, for example `v2.2.2`
 - release builds explicitly bundle the TUI package, effect modules, `pyfiglet` font assets, Rich, and Pillow runtime pieces so the standalone app works outside a Python environment
 
 #### Screensaver

@@ -1,5 +1,8 @@
 # Changelog
 
+## [2.2.2]
+- Temporal effects (`fade_in`, `wipe`, `stagger`) now perform continuous looping animations instead of stopping after initial transition
+
 ## [2.2.1]
 
 ### Added
@@ -15,8 +18,6 @@
 - Standalone release binaries now collect the full `bangen` package plus `pyfiglet`, Rich, and Pillow runtime assets so the packaged TUI app resolves imports correctly on `Windows`, `macOS`, and `Linux`
 - Project version metadata now reflects `2.2.1`
 
-### Fixed
-- Temporal effects (`fade_in`, `wipe`, `stagger`) now perform continuous looping animations instead of stopping after initial transition
 
 ## [2.2.0]
 
