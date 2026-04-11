@@ -64,10 +64,13 @@ jobs:
         include:
           - os: ubuntu-latest
             name: linux
+            binary: bangen
           - os: windows-latest
             name: windows
+            binary: bangen.exe
           - os: macos-latest
             name: macos
+            binary: bangen
 
     steps:
       - uses: actions/checkout@v4
@@ -99,8 +102,10 @@ jobs:
           printf 'from bangen.app import main\nif __name__ == "__main__":\n    main()\n' > _entry.py
           python -m PyInstaller \
             --onefile \
+            --noconfirm \
             --name bangen \
-            --distpath build \
+            --distpath dist \
+            --workpath build \
             --collect-all bangen \
             --collect-all pyfiglet \
             --collect-all rich \
@@ -124,22 +129,23 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ needs.tag.outputs.version }}
+          BINARY: ${{ matrix.binary }}
         run: |
-          mkdir -p dist
+          mkdir -p release
           NAME="bangen-${{ matrix.name }}-$VERSION"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            mv build/bangen.exe dist/"$NAME.exe"
-            powershell -Command "Compress-Archive -Path dist\\$NAME.exe -DestinationPath dist\\$NAME.zip"
-            rm dist/"$NAME.exe"
+            mv "dist/$BINARY" "release/$NAME.exe"
+            powershell -Command "Compress-Archive -Path release\\$NAME.exe -DestinationPath release\\$NAME.zip"
+            rm "release/$NAME.exe"
           else
-            mv build/bangen dist/"$NAME"
-            (cd dist && tar -czf "$NAME.tar.gz" "$NAME" && rm "$NAME")
+            mv "dist/$BINARY" "release/$NAME"
+            (cd release && tar -czf "$NAME.tar.gz" "$NAME" && rm "$NAME")
           fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}-build
-          path: dist/*
+          path: release/*
           retention-days: 1
 
   release:
@@ -180,10 +186,14 @@ jobs:
             SINCE_LINE="> Initial release"
           fi
 
-          FEATS=$(echo "$COMMITS"  | grep -E "^- feat"  | sed 's/^- feat[^:]*: /- /' || true)
-          FIXES=$(echo "$COMMITS"  | grep -E "^- fix"   | sed 's/^- fix[^:]*: /- /'  || true)
-          CHORES=$(echo "$COMMITS" | grep -E "^- (chore|refactor|perf|build|ci)" | sed 's/^- [^:]*: /- /' || true)
-          OTHER=$(echo "$COMMITS"  | grep -vE "^- (feat|fix|chore|refactor|perf|build|ci)" || true)
+          FEATS=$(echo "$COMMITS"  | grep -E "^- feat"                           | sed 's/^- feat[^:]*: /- /'  || true)
+          FIXES=$(echo "$COMMITS"  | grep -E "^- fix"                            | sed 's/^- fix[^:]*: /- /'   || true)
+          CHORES=$(echo "$COMMITS" | grep -E "^- (chore|refactor|perf|build|ci)" | sed 's/^- [^:]*: /- /'     || true)
+          OTHER=$(echo "$COMMITS"  | grep -vE "^- (feat|fix|chore|refactor|perf|build|ci)"                    || true)
+
+          LINUX_SHA=$(grep   "bangen-linux-$VERSION.tar.gz"   artifacts/SHA256SUMS.txt | awk '{print $1}' || true)
+          WINDOWS_SHA=$(grep "bangen-windows-$VERSION.zip"    artifacts/SHA256SUMS.txt | awk '{print $1}' || true)
+          MACOS_SHA=$(grep   "bangen-macos-$VERSION.tar.gz"   artifacts/SHA256SUMS.txt | awk '{print $1}' || true)
 
           {
             echo "body<<NOTES_EOF"
@@ -217,13 +227,33 @@ jobs:
             echo ""
             echo "## 📦 Downloads"
             echo ""
-            echo "| Platform | File |"
-            echo "|----------|------|"
-            echo "| 🐧 Linux  | \`bangen-linux-$VERSION.tar.gz\` |"
-            echo "| 🪟 Windows | \`bangen-windows-$VERSION.zip\` |"
-            echo "| 🍎 macOS  | \`bangen-macos-$VERSION.tar.gz\` |"
+            echo "Pre-built native binaries are available for all major platforms — no Python installation required."
             echo ""
-            echo "> 🔒 Verify downloads with \`SHA256SUMS.txt\`"
+            echo "| Platform | Architecture | File | SHA-256 |"
+            echo "|----------|-------------|------|---------|"
+            echo "| 🐧 Linux   | x86_64      | \`bangen-linux-$VERSION.tar.gz\`   | \`$LINUX_SHA\`   |"
+            echo "| 🪟 Windows | x86_64      | \`bangen-windows-$VERSION.zip\`    | \`$WINDOWS_SHA\` |"
+            echo "| 🍎 macOS   | arm64       | \`bangen-macos-$VERSION.tar.gz\`   | \`$MACOS_SHA\`   |"
+            echo ""
+            echo "### 🚀 Quick Install"
+            echo ""
+            echo "\`\`\`bash"
+            echo "# Linux / macOS"
+            echo "tar -xzf bangen-<platform>-$VERSION.tar.gz"
+            echo "chmod +x bangen-<platform>-$VERSION"
+            echo "sudo mv bangen-<platform>-$VERSION /usr/local/bin/bangen"
+            echo ""
+            echo "# Windows (PowerShell)"
+            echo "Expand-Archive bangen-windows-$VERSION.zip ."
+            echo "\`\`\`"
+            echo ""
+            echo "### 🔒 Verify Your Download"
+            echo ""
+            echo "\`\`\`bash"
+            echo "sha256sum -c SHA256SUMS.txt"
+            echo "\`\`\`"
+            echo ""
+            echo "> Full checksums for all artifacts are in \`SHA256SUMS.txt\`, included in the release assets below."
             echo "NOTES_EOF"
           } >> "$GITHUB_OUTPUT"
 
