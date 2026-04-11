@@ -3,6 +3,8 @@ name: Build & Release Bangen
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
       - "pyproject.toml"
 
@@ -55,71 +57,62 @@ jobs:
     name: Build (linux)
     needs: tag
     runs-on: ubuntu-latest
-    # Build inside manylinux2014 (CentOS 7, glibc 2.17) for maximum
-    # compatibility — covers old servers, cheap VPS, Google Colab, CI runners.
-    container:
-      image: quay.io/pypa/manylinux2014_x86_64
-      options: --user root
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Python deps
-        shell: bash
+      - name: Build inside manylinux2014 (glibc 2.17)
         env:
-          PY: /opt/python/cp311-cp311/bin/python
-        run: |
-          $PY -m pip install -U pip wheel pyinstaller
-          $PY -m pip install ".[all]"
-
-      - name: Build with PyInstaller
-        shell: bash
-        env:
-          PY: /opt/python/cp311-cp311/bin/python
           VERSION: ${{ needs.tag.outputs.version }}
         run: |
           printf 'from bangen.app import main\nif __name__ == "__main__":\n    main()\n' > _entry.py
-          $PY -m PyInstaller \
-            --onefile \
-            --noconfirm \
-            --strip \
-            --noupx \
-            --name bangen \
-            --distpath dist \
-            --workpath build \
-            --collect-all bangen \
-            --collect-all pyfiglet \
-            --collect-all rich \
-            --collect-all PIL \
-            --collect-all typer \
-            --exclude-module tkinter \
-            --exclude-module unittest \
-            --exclude-module test \
-            --exclude-module distutils \
-            --exclude-module setuptools \
-            --exclude-module pkg_resources \
-            --exclude-module email \
-            --exclude-module http \
-            --exclude-module html \
-            --exclude-module xml \
-            --exclude-module xmlrpc \
-            --optimize 2 \
-            _entry.py
 
-      - name: Verify glibc symbols
-        shell: bash
-        run: |
-          echo "=== GLIBC symbols in binary ==="
-          strings dist/bangen | grep "GLIBC_" | sort -V | uniq
-          echo "=== Checking for forbidden symbols above 2.17 ==="
-          if strings dist/bangen | grep -E "GLIBC_2\.(1[89]|[2-9][0-9])" | grep -v "GLIBC_2.17"; then
-            echo "ERROR: Binary requires glibc newer than 2.17!"
-            exit 1
-          fi
-          echo "✅ Binary is glibc 2.17 compatible"
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            -e VERSION="$VERSION" \
+            quay.io/pypa/manylinux2014_x86_64 \
+            bash -c '
+              set -euo pipefail
+              PY=/opt/python/cp311-cp311/bin/python
+              $PY -m pip install -q -U pip wheel pyinstaller
+              $PY -m pip install -q ".[all]"
+              $PY -m PyInstaller \
+                --onefile \
+                --noconfirm \
+                --strip \
+                --noupx \
+                --name bangen \
+                --distpath dist \
+                --workpath build \
+                --collect-all bangen \
+                --collect-all pyfiglet \
+                --collect-all rich \
+                --collect-all PIL \
+                --collect-all typer \
+                --exclude-module tkinter \
+                --exclude-module unittest \
+                --exclude-module test \
+                --exclude-module distutils \
+                --exclude-module setuptools \
+                --exclude-module pkg_resources \
+                --exclude-module email \
+                --exclude-module http \
+                --exclude-module html \
+                --exclude-module xml \
+                --exclude-module xmlrpc \
+                --optimize 2 \
+                _entry.py
+              echo "=== GLIBC symbols ==="
+              strings dist/bangen | grep "GLIBC_" | sort -V | uniq
+              if strings dist/bangen | grep -E "GLIBC_2\.(1[89]|[2-9][0-9])"; then
+                echo "ERROR: Binary requires glibc newer than 2.17!"
+                exit 1
+              fi
+              echo "✅ glibc 2.17 compatible"
+            '
 
       - name: Package artifact
-        shell: bash
         env:
           VERSION: ${{ needs.tag.outputs.version }}
         run: |
@@ -316,7 +309,7 @@ jobs:
             echo ""
             echo "### 🐧 Linux compatibility"
             echo ""
-            echo "The Linux binary is built inside a \`manylinux2014\` (CentOS 7) container against **glibc 2.17**, "
+            echo "The Linux binary is built inside a \`manylinux2014\` (CentOS 7) container against **glibc 2.17**,"
             echo "making it compatible with virtually any Linux system from 2014 onwards — including:"
             echo ""
             echo "| Environment | Compatible |"
@@ -324,7 +317,7 @@ jobs:
             echo "| Google Colab | ✅ |"
             echo "| Ubuntu 16.04+ | ✅ |"
             echo "| Debian 8+ | ✅ |"
-            echo "| RHEL/CentOS 7+ | ✅ |"
+            echo "| RHEL / CentOS 7+ | ✅ |"
             echo "| Fedora 20+ | ✅ |"
             echo "| Old VPS / servers | ✅ |"
             echo "| GitHub Actions runners | ✅ |"
@@ -347,7 +340,7 @@ jobs:
             echo "# Move bangen.exe somewhere on your PATH"
             echo ""
             echo "# Google Colab"
-            echo "!wget -q https://github.com/\${{ github.repository }}/releases/download/$VERSION/bangen-linux-$VERSION.tar.gz"
+            echo "!wget -q https://github.com/${{ github.repository }}/releases/download/$VERSION/bangen-linux-$VERSION.tar.gz"
             echo "!tar -xzf bangen-linux-$VERSION.tar.gz"
             echo "!chmod +x bangen-linux-$VERSION && mv bangen-linux-$VERSION /usr/local/bin/bangen"
             echo "!bangen --help"
