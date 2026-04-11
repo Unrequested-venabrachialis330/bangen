@@ -86,17 +86,6 @@ jobs:
                 --collect-all rich \
                 --collect-all PIL \
                 --collect-all typer \
-                --exclude-module tkinter \
-                --exclude-module unittest \
-                --exclude-module test \
-                --exclude-module distutils \
-                --exclude-module setuptools \
-                --exclude-module pkg_resources \
-                --exclude-module email \
-                --exclude-module http \
-                --exclude-module html \
-                --exclude-module xml \
-                --exclude-module xmlrpc \
                 --optimize 2 \
                 _entry.py
 
