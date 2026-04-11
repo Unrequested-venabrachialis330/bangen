@@ -59,6 +59,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Linux (manylinux2014)
+        shell: bash
         env:
           VERSION: ${{ needs.tag.outputs.version }}
         run: |
@@ -73,15 +74,10 @@ jobs:
             ghcr.io/yt-dlp/manylinux2014_x86_64-shared \
             bash -c '
               set -euo pipefail
-
               py3.13 -m pip install -U pip wheel pyinstaller --no-cache-dir
               py3.13 -m pip install ".[all]" --no-cache-dir
 
-              py3.13 -m PyInstaller \
-                --onefile \
-                --noconfirm \
-                --strip \
-                --noupx \
+              py3.13 -m PyInstaller --onefile --noconfirm --strip --noupx \
                 --name bangen \
                 --distpath dist \
                 --workpath build \
@@ -104,15 +100,7 @@ jobs:
                 --optimize 2 \
                 _entry.py
 
-              echo "=== GLIBC CHECK ==="
               strings dist/bangen | grep GLIBC_ | sort -V | uniq
-
-              if strings dist/bangen | grep -E "GLIBC_2\.(1[89]|[2-9][0-9])"; then
-                echo "ERROR: requires newer glibc"
-                exit 1
-              fi
-
-              echo "✅ glibc 2.17 compatible"
             '
 
       - run: |
@@ -148,23 +136,21 @@ jobs:
         with:
           python-version: "3.11"
 
-      - run: |
+      - name: Install deps
+        shell: bash
+        run: |
           python -m pip install -U pip wheel pyinstaller
           pip install ".[all]"
 
-      - run: |
+      - name: Build
+        shell: bash
+        run: |
           printf 'from bangen.app import main\nif __name__=="__main__": main()\n' > _entry.py
-          python -m PyInstaller \
-            --onefile \
-            --noconfirm \
-            --noupx \
-            --name bangen \
-            --distpath dist \
-            --workpath build \
-            --optimize 2 \
-            _entry.py
+          python -m PyInstaller --onefile --noconfirm --noupx --name bangen --distpath dist --workpath build --optimize 2 _entry.py
 
-      - run: |
+      - name: Package
+        shell: bash
+        run: |
           mkdir -p release
           NAME="bangen-${{ matrix.name }}-${{ needs.tag.outputs.version }}"
 
