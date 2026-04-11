@@ -85,46 +85,39 @@ jobs:
           key: pip-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: pip-${{ runner.os }}-
 
-      - name: Cache Nuitka
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/Nuitka
-          key: nuitka-${{ runner.os }}-${{ hashFiles('**/*.py') }}
-          restore-keys: nuitka-${{ runner.os }}-
-
-      - name: Install system deps (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y patchelf
-
-      - name: MSVC setup (Windows)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-
       - name: Install Python deps
         shell: bash
         run: |
-          python -m pip install -U pip wheel nuitka zstandard
+          python -m pip install -U pip wheel pyinstaller
           pip install ".[all]"
 
-      - name: Build with Nuitka
+      - name: Build with PyInstaller
         shell: bash
         env:
           VERSION: ${{ needs.tag.outputs.version }}
         run: |
           printf 'from bangen.app import main\nif __name__ == "__main__":\n    main()\n' > _entry.py
-          python -m nuitka \
-            --mode=onefile \
-            --assume-yes-for-downloads \
-            --output-dir=build \
-            --output-filename=bangen \
-            --include-package=bangen \
-            --include-package=pyfiglet \
-            --include-package=rich \
-            --include-package=PIL \
-            --include-package=typer \
-            --nofollow-import-to=tkinter,unittest,test,distutils,setuptools,pkg_resources,email,http,html,xml,xmlrpc \
-            --python-flag=no_asserts,no_docstrings,isolated \
-            --onefile-tempdir-spec="{CACHE_DIR}/bangen/$VERSION" \
+          python -m PyInstaller \
+            --onefile \
+            --name bangen \
+            --distpath build \
+            --collect-all bangen \
+            --collect-all pyfiglet \
+            --collect-all rich \
+            --collect-all PIL \
+            --collect-all typer \
+            --exclude-module tkinter \
+            --exclude-module unittest \
+            --exclude-module test \
+            --exclude-module distutils \
+            --exclude-module setuptools \
+            --exclude-module pkg_resources \
+            --exclude-module email \
+            --exclude-module http \
+            --exclude-module html \
+            --exclude-module xml \
+            --exclude-module xmlrpc \
+            --optimize 2 \
             _entry.py
 
       - name: Package artifact
@@ -187,7 +180,6 @@ jobs:
             SINCE_LINE="> Initial release"
           fi
 
-          # Bucket commits by conventional prefix
           FEATS=$(echo "$COMMITS"  | grep -E "^- feat"  | sed 's/^- feat[^:]*: /- /' || true)
           FIXES=$(echo "$COMMITS"  | grep -E "^- fix"   | sed 's/^- fix[^:]*: /- /'  || true)
           CHORES=$(echo "$COMMITS" | grep -E "^- (chore|refactor|perf|build|ci)" | sed 's/^- [^:]*: /- /' || true)
