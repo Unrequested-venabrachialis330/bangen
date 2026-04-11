@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build inside manylinux2014 (glibc 2.17)
+      - name: Build inside manylinux2014 + shared Python (glibc 2.17)
         env:
           VERSION: ${{ needs.tag.outputs.version }}
         run: |
@@ -69,13 +69,12 @@ jobs:
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
             -e VERSION="$VERSION" \
-            quay.io/pypa/manylinux2014_x86_64 \
+            ghcr.io/yt-dlp/manylinux2014_x86_64-shared \
             bash -c '
               set -euo pipefail
-              PY=/opt/python/cp311-cp311/bin/python
-              $PY -m pip install -q -U pip wheel pyinstaller
-              $PY -m pip install -q ".[all]"
-              $PY -m PyInstaller \
+              py3.13 -m pip install -q -U pip wheel pyinstaller
+              py3.13 -m pip install -q ".[all]"
+              py3.13 -m PyInstaller \
                 --onefile \
                 --noconfirm \
                 --strip \
